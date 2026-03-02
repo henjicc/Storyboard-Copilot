@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --surface: #f5f5f5;
+  --border: #e0e0e0;
+  --text: #000000;
+  --text-muted: #666666;
+  --accent: #3B82F6;
+  --ui-surface-panel: rgb(26, 26, 26);
+  --ui-surface-field: rgba(10, 10, 12, 0.92);
+  --ui-border-soft: rgba(255, 255, 255, 0.14);
+  --ui-border-strong: rgba(255, 255, 255, 0.24);
+  --ui-shadow-panel: 0 14px 34px rgba(0, 0, 0, 0.38);
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-radius-2xl: 20px;
+}
+
+.dark {
+  --bg: #0f0f0f;
+  --surface: #1a1a1a;
+  --border: #2a2a2a;
+  --text: #ffffff;
+  --text-muted: #888888;
+  --ui-surface-panel: rgb(26, 26, 26);
+  --ui-surface-field: rgba(10, 10, 12, 0.92);
+  --ui-border-soft: rgba(255, 255, 255, 0.14);
+  --ui-border-strong: rgba(255, 255, 255, 0.24);
+  --ui-shadow-panel: 0 14px 34px rgba(0, 0, 0, 0.38);
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-radius-2xl: 20px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+.react-flow__node {
+  border-radius: 8px;
+}
+
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+}
+
+.ui-panel {
+  background: var(--ui-surface-panel);
+  border-color: var(--ui-border-soft);
+  border-radius: var(--ui-radius-xl);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.ui-field {
+  background: var(--ui-surface-field);
+  border-color: var(--ui-border-soft);
+  border-radius: var(--ui-radius-lg);
+}
+
+.panel-anim-enter {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.panel-anim-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.panel-anim-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.panel-anim-exit-active {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition: opacity 130ms ease, transform 150ms ease;
+}
+
+.canvas-minimap {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.canvas-minimap .react-flow__minimap-mask {
+  cursor: grab;
+  stroke: rgba(160, 160, 160, 0.92);
+  stroke-width: 1.4px;
+  fill: rgba(90, 90, 90, 0.2);
+}
+
+.canvas-minimap .react-flow__minimap-mask:active {
+  cursor: grabbing;
+}

@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "分镜助手",
+    "subtitle": "Storyboard Copilot"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功"
+  },
+  "theme": {
+    "dark": "深色",
+    "light": "浅色"
+  },
+  "canvas": {
+    "addImage": "添加图片",
+    "splitStoryboard": "分镜切割",
+    "generate": "生成",
+    "toolbar": {
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fitView": "适应视图",
+      "lock": "锁定画布",
+      "unlock": "解锁画布"
+    }
+  },
+  "node": {
+    "menu": {
+      "uploadImage": "上传图片",
+      "aiImageGeneration": "AI图片生成",
+      "storyboard": "分镜节点",
+      "textAnnotation": "文本注释"
+    },
+    "imageNode": {
+      "title": "图片节点",
+      "prompt": "提示词",
+      "model": "模型",
+      "size": "尺寸",
+      "aspectRatio": "宽高比",
+      "referenceImages": "参考图",
+      "noImage": "暂无图片",
+      "dragImage": "拖拽或点击上传图片"
+    },
+    "storyboardNode": {
+      "title": "分镜节点",
+      "frames": "分镜格",
+      "rows": "行数",
+      "cols": "列数",
+      "frameIndex": "第 {{index}} 格"
+    }
+  },
+  "split": {
+    "title": "分镜切割",
+    "rows": "行数",
+    "cols": "列数",
+    "preview": "预览",
+    "split": "切割"
+  },
+  "ai": {
+    "provider": "AI 提供商",
+    "model": "模型",
+    "prompt": "提示词",
+    "generating": "生成中...",
+    "success": "生成成功",
+    "error": "生成失败"
+  },
+  "project": {
+    "title": "项目管理",
+    "newProject": "新建项目",
+    "newProjectTitle": "新建项目",
+    "open": "打开项目",
+    "save": "保存项目",
+    "name": "项目名称",
+    "namePlaceholder": "请输入项目名称",
+    "rename": "重命名",
+    "renameTitle": "重命名项目",
+    "delete": "删除项目",
+    "created": "创建时间",
+    "modified": "修改时间",
+    "updatedAt": "更新时间",
+    "nodes": "节点数",
+    "noProjects": "暂无项目",
+    "empty": "暂无项目",
+    "emptyHint": "点击上方按钮创建新项目"
+  },
+  "settings": {
+    "title": "设置",
+    "providers": "密钥",
+    "providersDesc": "配置 AI 服务商的 API 密钥",
+    "appearance": "外观",
+    "appearanceDesc": "自定义应用外观",
+    "general": "通用",
+    "generalDesc": "通用设置",
+    "apiKey": "API Key",
+    "model": "模型",
+    "enterApiKey": "输入 API Key",
+    "addProvider": "添加供应商",
+    "comingSoon": "即将推出..."
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "Storyboard Copilot",
+    "subtitle": "AI Storyboard Tool"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "theme": {
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "canvas": {
+    "addImage": "Add Image",
+    "splitStoryboard": "Split Storyboard",
+    "generate": "Generate",
+    "toolbar": {
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitView": "Fit View",
+      "lock": "Lock Canvas",
+      "unlock": "Unlock Canvas"
+    }
+  },
+  "node": {
+    "menu": {
+      "uploadImage": "Upload Image",
+      "aiImageGeneration": "AI Image Generation",
+      "storyboard": "Storyboard Node",
+      "textAnnotation": "Text Annotation"
+    },
+    "imageNode": {
+      "title": "Image Node",
+      "prompt": "Prompt",
+      "model": "Model",
+      "size": "Size",
+      "aspectRatio": "Aspect Ratio",
+      "referenceImages": "Reference Images",
+      "noImage": "No Image",
+      "dragImage": "Drag or click to upload image"
+    },
+    "storyboardNode": {
+      "title": "Storyboard Node",
+      "frames": "Frames",
+      "rows": "Rows",
+      "cols": "Columns",
+      "frameIndex": "Frame {{index}}"
+    }
+  },
+  "split": {
+    "title": "Split Storyboard",
+    "rows": "Rows",
+    "cols": "Columns",
+    "preview": "Preview",
+    "split": "Split"
+  },
+  "ai": {
+    "provider": "AI Provider",
+    "model": "Model",
+    "prompt": "Prompt",
+    "generating": "Generating...",
+    "success": "Generated successfully",
+    "error": "Generation failed"
+  },
+  "project": {
+    "title": "Projects",
+    "newProject": "New Project",
+    "newProjectTitle": "New Project",
+    "open": "Open Project",
+    "save": "Save Project",
+    "name": "Project Name",
+    "namePlaceholder": "Enter project name",
+    "rename": "Rename",
+    "renameTitle": "Rename Project",
+    "delete": "Delete Project",
+    "created": "Created",
+    "modified": "Modified",
+    "updatedAt": "Updated",
+    "nodes": "Nodes",
+    "noProjects": "No Projects",
+    "empty": "No Projects",
+    "emptyHint": "Click the button above to create a new project"
+  },
+  "settings": {
+    "title": "Settings",
+    "providers": "API Key",
+    "providersDesc": "Configure AI provider API keys",
+    "appearance": "Appearance",
+    "appearanceDesc": "Customize app appearance",
+    "general": "General",
+    "generalDesc": "General settings",
+    "apiKey": "API Key",
+    "model": "Model",
+    "enterApiKey": "Enter API Key",
+    "addProvider": "Add Provider",
+    "comingSoon": "Coming soon..."
+  }
+}
