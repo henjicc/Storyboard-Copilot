@@ -403,6 +403,12 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const addEdge = useCanvasStore((state) => state.addEdge);
   const findNodePosition = useCanvasStore((state) => state.findNodePosition);
   const apiKey = useSettingsStore((state) => state.apiKey);
+  const storyboardGenKeepStyleConsistent = useSettingsStore(
+    (state) => state.storyboardGenKeepStyleConsistent
+  );
+  const storyboardGenDisableTextInImage = useSettingsStore(
+    (state) => state.storyboardGenDisableTextInImage
+  );
 
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -647,7 +653,16 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     const { gridRows, gridCols, frames } = nodeData;
     const parts: string[] = [];
 
-    parts.push(`生成一张${gridRows}×${gridCols}的${gridRows * gridCols}宫格分镜图`);
+    const promptDirectives: string[] = [
+      `生成一张${gridRows}×${gridCols}的${gridRows * gridCols}宫格分镜图`,
+    ];
+    if (storyboardGenKeepStyleConsistent) {
+      promptDirectives.push('图片风格与参考图保持一致');
+    }
+    if (storyboardGenDisableTextInImage) {
+      promptDirectives.push('禁止添加描述文本');
+    }
+    parts.push(`${promptDirectives.join('，')}。`);
 
     frames.forEach((frame, index) => {
       const sanitizedDescription = frame.description.replace(/@(?=图\d+)/g, '').trim();
@@ -655,17 +670,11 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         return;
       }
 
-      let frameText = `分镜${index + 1}：${sanitizedDescription}`;
-      const referencedImageIndex =
-        frame.referenceIndex ?? resolveReferenceIndexFromDescription(frame.description, incomingImages.length);
-      if (referencedImageIndex !== null && incomingImages[referencedImageIndex]) {
-        frameText += `，参考：图${referencedImageIndex + 1}`;
-      }
-      parts.push(frameText);
+      parts.push(`分镜${index + 1}：${sanitizedDescription}`);
     });
 
     return parts.join('\n');
-  }, [nodeData, incomingImages]);
+  }, [nodeData, storyboardGenDisableTextInImage, storyboardGenKeepStyleConsistent]);
 
   const handleGenerate = useCallback(async () => {
     if (!nodeData) {

@@ -18,9 +18,13 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     apiKey,
     downloadPresetPaths,
     useUploadFilenameAsNodeTitle,
+    storyboardGenKeepStyleConsistent,
+    storyboardGenDisableTextInImage,
     setApiKey,
     setDownloadPresetPaths,
     setUseUploadFilenameAsNodeTitle,
+    setStoryboardGenKeepStyleConsistent,
+    setStoryboardGenDisableTextInImage,
   } = useSettingsStore();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('providers');
   const [localApiKey, setLocalApiKey] = useState(apiKey);
@@ -28,6 +32,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [localDownloadPresetPaths, setLocalDownloadPresetPaths] = useState(downloadPresetPaths);
   const [localUseUploadFilenameAsNodeTitle, setLocalUseUploadFilenameAsNodeTitle] = useState(
     useUploadFilenameAsNodeTitle
+  );
+  const [localStoryboardGenKeepStyleConsistent, setLocalStoryboardGenKeepStyleConsistent] =
+    useState(storyboardGenKeepStyleConsistent);
+  const [localStoryboardGenDisableTextInImage, setLocalStoryboardGenDisableTextInImage] = useState(
+    storyboardGenDisableTextInImage
   );
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -38,21 +47,36 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setLocalApiKey(apiKey);
     setLocalDownloadPresetPaths(downloadPresetPaths);
     setLocalUseUploadFilenameAsNodeTitle(useUploadFilenameAsNodeTitle);
+    setLocalStoryboardGenKeepStyleConsistent(storyboardGenKeepStyleConsistent);
+    setLocalStoryboardGenDisableTextInImage(storyboardGenDisableTextInImage);
     setLocalDownloadPathInput('');
-  }, [apiKey, downloadPresetPaths, isOpen, useUploadFilenameAsNodeTitle]);
+  }, [
+    apiKey,
+    downloadPresetPaths,
+    isOpen,
+    useUploadFilenameAsNodeTitle,
+    storyboardGenKeepStyleConsistent,
+    storyboardGenDisableTextInImage,
+  ]);
 
   const handleSave = useCallback(() => {
     setApiKey(localApiKey);
     setDownloadPresetPaths(localDownloadPresetPaths);
     setUseUploadFilenameAsNodeTitle(localUseUploadFilenameAsNodeTitle);
+    setStoryboardGenKeepStyleConsistent(localStoryboardGenKeepStyleConsistent);
+    setStoryboardGenDisableTextInImage(localStoryboardGenDisableTextInImage);
     onClose();
   }, [
     localApiKey,
     localDownloadPresetPaths,
     localUseUploadFilenameAsNodeTitle,
+    localStoryboardGenKeepStyleConsistent,
+    localStoryboardGenDisableTextInImage,
     setApiKey,
     setDownloadPresetPaths,
     setUseUploadFilenameAsNodeTitle,
+    setStoryboardGenKeepStyleConsistent,
+    setStoryboardGenDisableTextInImage,
     onClose,
   ]);
 
@@ -257,6 +281,42 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </div>
 
               <div className="ui-scrollbar flex-1 space-y-4 overflow-y-auto p-6">
+                <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
+                  <div className="flex items-start gap-3">
+                    <UiCheckbox
+                      checked={localStoryboardGenKeepStyleConsistent}
+                      onCheckedChange={(checked) => setLocalStoryboardGenKeepStyleConsistent(checked)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <h3 className="text-sm font-medium text-text-dark">
+                        {t('settings.storyboardGenKeepStyleConsistent')}
+                      </h3>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {t('settings.storyboardGenKeepStyleConsistentDesc')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
+                  <div className="flex items-start gap-3">
+                    <UiCheckbox
+                      checked={localStoryboardGenDisableTextInImage}
+                      onCheckedChange={(checked) => setLocalStoryboardGenDisableTextInImage(checked)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <h3 className="text-sm font-medium text-text-dark">
+                        {t('settings.storyboardGenDisableTextInImage')}
+                      </h3>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {t('settings.storyboardGenDisableTextInImageDesc')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
                   <div className="flex items-start gap-3">
                     <UiCheckbox
