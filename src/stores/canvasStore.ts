@@ -22,6 +22,10 @@ import {
   type StoryboardFrameItem,
   isStoryboardSplitNode,
 } from '@/features/canvas/domain/canvasNodes';
+import {
+  nodeHasSourceHandle,
+  nodeHasTargetHandle,
+} from '@/features/canvas/domain/nodeRegistry';
 import { nodeCatalog } from '@/features/canvas/application/nodeCatalog';
 import { canvasNodeFactory } from '@/features/canvas/application/canvasServices';
 
@@ -101,6 +105,9 @@ interface CanvasState {
   ) => void;
 
   deleteNode: (nodeId: string) => void;
+  deleteNodes: (nodeIds: string[]) => void;
+  groupNodes: (nodeIds: string[]) => string | null;
+  ungroupNode: (groupNodeId: string) => boolean;
   deleteEdge: (edgeId: string) => void;
   setSelectedNode: (nodeId: string | null) => void;
 
@@ -111,25 +118,6 @@ interface CanvasState {
   redo: () => boolean;
 
   clearCanvas: () => void;
-}
-
-function nodeHasSourceHandle(type: CanvasNodeType): boolean {
-  return (
-    type === CANVAS_NODE_TYPES.upload ||
-    type === CANVAS_NODE_TYPES.exportImage ||
-    type === CANVAS_NODE_TYPES.imageEdit ||
-    type === CANVAS_NODE_TYPES.storyboardSplit ||
-    type === CANVAS_NODE_TYPES.storyboardGen
-  );
-}
-
-function nodeHasTargetHandle(type: CanvasNodeType): boolean {
-  return (
-    type === CANVAS_NODE_TYPES.exportImage ||
-    type === CANVAS_NODE_TYPES.imageEdit ||
-    type === CANVAS_NODE_TYPES.storyboardSplit ||
-    type === CANVAS_NODE_TYPES.storyboardGen
-  );
 }
 
 function normalizeHandleId(value: unknown): string | undefined {
@@ -259,6 +247,66 @@ function createSnapshot(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasHistory
   return { nodes, edges };
 }
 
+function collectNodeIdsWithDescendants(nodes: CanvasNode[], seedIds: string[]): Set<string> {
+  const deleteSet = new Set(seedIds);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (!node.parentId || deleteSet.has(node.id)) {
+        continue;
+      }
+      if (deleteSet.has(node.parentId)) {
+        deleteSet.add(node.id);
+        changed = true;
+      }
+    }
+  }
+
+  return deleteSet;
+}
+
+function getNodeSize(node: CanvasNode): { width: number; height: number } {
+  return {
+    width:
+      typeof node.measured?.width === 'number'
+        ? node.measured.width
+        : typeof node.width === 'number'
+          ? node.width
+          : DEFAULT_NODE_WIDTH,
+    height:
+      typeof node.measured?.height === 'number'
+        ? node.measured.height
+        : typeof node.height === 'number'
+          ? node.height
+          : 200,
+  };
+}
+
+function resolveAbsolutePosition(
+  node: CanvasNode,
+  nodeMap: Map<string, CanvasNode>
+): { x: number; y: number } {
+  let x = node.position.x;
+  let y = node.position.y;
+  let currentParentId = node.parentId;
+  const visited = new Set<string>();
+
+  while (currentParentId && !visited.has(currentParentId)) {
+    visited.add(currentParentId);
+    const parent = nodeMap.get(currentParentId);
+    if (!parent) {
+      break;
+    }
+    x += parent.position.x;
+    y += parent.position.y;
+    currentParentId = parent.parentId;
+  }
+
+  return { x, y };
+}
+
 function pushSnapshot(
   snapshots: CanvasHistorySnapshot[],
   snapshot: CanvasHistorySnapshot
@@ -343,22 +391,36 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           'dragging' in change &&
           change.dragging === false
       );
+      const hasResizeMove = changes.some(
+        (change) =>
+          change.type === 'dimensions' &&
+          'resizing' in change &&
+          Boolean(change.resizing)
+      );
+      const hasResizeEnd = changes.some(
+        (change) =>
+          change.type === 'dimensions' &&
+          'resizing' in change &&
+          change.resizing === false
+      );
+      const hasInteractionMove = hasDragMove || hasResizeMove;
+      const hasInteractionEnd = hasDragEnd || hasResizeEnd;
 
       let nextHistory = state.history;
       let nextDragHistorySnapshot = state.dragHistorySnapshot;
 
-      if (hasDragMove && !nextDragHistorySnapshot) {
+      if (hasInteractionMove && !nextDragHistorySnapshot) {
         nextDragHistorySnapshot = createSnapshot(state.nodes, state.edges);
       }
 
-      if (hasDragEnd) {
+      if (hasInteractionEnd) {
         const snapshot = nextDragHistorySnapshot ?? createSnapshot(state.nodes, state.edges);
         nextHistory = {
           past: pushSnapshot(state.history.past, snapshot),
           future: [],
         };
         nextDragHistorySnapshot = null;
-      } else if (hasMeaningfulChange && !hasDragMove) {
+      } else if (hasMeaningfulChange && !hasInteractionMove) {
         nextHistory = {
           past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
           future: [],
@@ -748,20 +810,36 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   deleteNode: (nodeId) => {
+    get().deleteNodes([nodeId]);
+  },
+
+  deleteNodes: (nodeIds) => {
+    const uniqueIds = Array.from(new Set(nodeIds.filter((nodeId) => nodeId.trim().length > 0)));
+    if (uniqueIds.length === 0) {
+      return;
+    }
+
     set((state) => {
-      const hasNode = state.nodes.some((node) => node.id === nodeId);
-      if (!hasNode) {
+      const existingIds = uniqueIds.filter((nodeId) => state.nodes.some((node) => node.id === nodeId));
+      if (existingIds.length === 0) {
         return {};
       }
 
-      const nextNodes = state.nodes.filter((node) => node.id !== nodeId);
-      const nextEdges = state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+      const deleteSet = collectNodeIdsWithDescendants(state.nodes, existingIds);
+      const nextNodes = state.nodes.filter((node) => !deleteSet.has(node.id));
+      const nextEdges = state.edges.filter(
+        (edge) => !deleteSet.has(edge.source) && !deleteSet.has(edge.target)
+      );
 
       return {
         nodes: nextNodes,
         edges: nextEdges,
-        selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
-        activeToolDialog: state.activeToolDialog?.nodeId === nodeId ? null : state.activeToolDialog,
+        selectedNodeId:
+          state.selectedNodeId && deleteSet.has(state.selectedNodeId) ? null : state.selectedNodeId,
+        activeToolDialog:
+          state.activeToolDialog && deleteSet.has(state.activeToolDialog.nodeId)
+            ? null
+            : state.activeToolDialog,
         history: {
           past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
           future: [],
@@ -769,6 +847,203 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         dragHistorySnapshot: null,
       };
     });
+  },
+
+  groupNodes: (nodeIds) => {
+    const uniqueIds = Array.from(new Set(nodeIds.filter((nodeId) => nodeId.trim().length > 0)));
+    if (uniqueIds.length < 2) {
+      return null;
+    }
+
+    const state = get();
+    const nodeMap = new Map(state.nodes.map((node) => [node.id, node] as const));
+    const existingIds = uniqueIds.filter((nodeId) => nodeMap.has(nodeId));
+    if (existingIds.length < 2) {
+      return null;
+    }
+
+    const selectedSet = new Set(existingIds);
+    const memberIds = existingIds.filter((nodeId) => {
+      let currentParentId = nodeMap.get(nodeId)?.parentId;
+      const visited = new Set<string>();
+      while (currentParentId && !visited.has(currentParentId)) {
+        if (selectedSet.has(currentParentId)) {
+          return false;
+        }
+        visited.add(currentParentId);
+        currentParentId = nodeMap.get(currentParentId)?.parentId;
+      }
+      return true;
+    });
+    if (memberIds.length < 2) {
+      return null;
+    }
+
+    const memberSet = new Set(memberIds);
+    const members = memberIds
+      .map((id) => nodeMap.get(id))
+      .filter((node): node is CanvasNode => Boolean(node));
+
+    const absoluteBounds = members.reduce(
+      (acc, node) => {
+        const absolute = resolveAbsolutePosition(node, nodeMap);
+        const size = getNodeSize(node);
+        return {
+          minX: Math.min(acc.minX, absolute.x),
+          minY: Math.min(acc.minY, absolute.y),
+          maxX: Math.max(acc.maxX, absolute.x + size.width),
+          maxY: Math.max(acc.maxY, absolute.y + size.height),
+        };
+      },
+      {
+        minX: Number.POSITIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+      }
+    );
+
+    if (!Number.isFinite(absoluteBounds.minX) || !Number.isFinite(absoluteBounds.minY)) {
+      return null;
+    }
+
+    const SIDE_PADDING = 20;
+    const TOP_PADDING = 34;
+    const BOTTOM_PADDING = 20;
+    const groupX = Math.round(absoluteBounds.minX - SIDE_PADDING);
+    const groupY = Math.round(absoluteBounds.minY - TOP_PADDING);
+    const groupWidth = Math.round(
+      Math.max(220, absoluteBounds.maxX - absoluteBounds.minX + SIDE_PADDING * 2)
+    );
+    const groupHeight = Math.round(
+      Math.max(140, absoluteBounds.maxY - absoluteBounds.minY + TOP_PADDING + BOTTOM_PADDING)
+    );
+
+    const existingGroupCount = state.nodes.filter((node) => node.type === CANVAS_NODE_TYPES.group).length;
+    const groupNode = canvasNodeFactory.createNode(
+      CANVAS_NODE_TYPES.group,
+      { x: groupX, y: groupY },
+      { label: `组 ${existingGroupCount + 1}` }
+    );
+    groupNode.style = { width: groupWidth, height: groupHeight };
+    groupNode.selected = true;
+
+    const updatedMemberMap = new Map<string, CanvasNode>();
+    for (const node of members) {
+      const absolute = resolveAbsolutePosition(node, nodeMap);
+      updatedMemberMap.set(node.id, {
+        ...node,
+        parentId: groupNode.id,
+        extent: 'parent',
+        position: {
+          x: Math.round(absolute.x - groupX),
+          y: Math.round(absolute.y - groupY),
+        },
+        selected: false,
+      });
+    }
+
+    const firstMemberIndex = state.nodes.reduce((acc, node, index) => {
+      if (!memberSet.has(node.id)) {
+        return acc;
+      }
+      return acc === -1 ? index : Math.min(acc, index);
+    }, -1);
+
+    const nextNodes: CanvasNode[] = [];
+    let insertedGroup = false;
+    for (let index = 0; index < state.nodes.length; index += 1) {
+      const node = state.nodes[index];
+      if (!insertedGroup && index === firstMemberIndex) {
+        nextNodes.push(groupNode);
+        insertedGroup = true;
+      }
+
+      const updatedMember = updatedMemberMap.get(node.id);
+      if (updatedMember) {
+        nextNodes.push(updatedMember);
+      } else {
+        nextNodes.push({
+          ...node,
+          selected: false,
+        });
+      }
+    }
+
+    if (!insertedGroup) {
+      nextNodes.push(groupNode);
+    }
+
+    set({
+      nodes: nextNodes,
+      selectedNodeId: groupNode.id,
+      activeToolDialog:
+        state.activeToolDialog && memberSet.has(state.activeToolDialog.nodeId)
+          ? null
+          : state.activeToolDialog,
+      history: {
+        past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
+        future: [],
+      },
+      dragHistorySnapshot: null,
+    });
+
+    return groupNode.id;
+  },
+
+  ungroupNode: (groupNodeId) => {
+    const state = get();
+    const groupNode = state.nodes.find(
+      (node) => node.id === groupNodeId && node.type === CANVAS_NODE_TYPES.group
+    );
+    if (!groupNode) {
+      return false;
+    }
+
+    const nodeMap = new Map(state.nodes.map((node) => [node.id, node] as const));
+    const children = state.nodes.filter((node) => node.parentId === groupNodeId);
+    if (children.length === 0) {
+      return false;
+    }
+
+    const nextNodes = state.nodes
+      .filter((node) => node.id !== groupNodeId)
+      .map((node) => {
+        if (node.parentId !== groupNodeId) {
+          return node;
+        }
+
+        const absolute = resolveAbsolutePosition(node, nodeMap);
+        return {
+          ...node,
+          parentId: undefined,
+          extent: undefined,
+          position: {
+            x: Math.round(absolute.x),
+            y: Math.round(absolute.y),
+          },
+          selected: false,
+        };
+      });
+
+    const nextEdges = state.edges.filter(
+      (edge) => edge.source !== groupNodeId && edge.target !== groupNodeId
+    );
+
+    set({
+      nodes: nextNodes,
+      edges: nextEdges,
+      selectedNodeId: state.selectedNodeId === groupNodeId ? null : state.selectedNodeId,
+      activeToolDialog:
+        state.activeToolDialog?.nodeId === groupNodeId ? null : state.activeToolDialog,
+      history: {
+        past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
+        future: [],
+      },
+      dragHistorySnapshot: null,
+    });
+
+    return true;
   },
 
   deleteEdge: (edgeId) => {

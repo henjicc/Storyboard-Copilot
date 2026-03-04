@@ -54,6 +54,10 @@
       "rows": "行数",
       "cols": "列数",
       "frameIndex": "第 {{index}} 格"
+    },
+    "textAnnotation": {
+      "placeholder": "输入 Markdown 文本，取消选中后会渲染预览",
+      "empty": "空注释"
     }
   },
   "split": {

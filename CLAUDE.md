@@ -20,9 +20,11 @@
 - `src/features/canvas/Canvas.tsx`
 - `src/features/canvas/domain/canvasNodes.ts`
 - `src/features/canvas/domain/nodeRegistry.ts`
+- `src/features/canvas/NodeSelectionMenu.tsx`
 
 3. 节点与覆盖层
 - `src/features/canvas/nodes/*.tsx`
+- `src/features/canvas/nodes/GroupNode.tsx`
 - `src/features/canvas/ui/SelectedNodeOverlay.tsx`
 - `src/features/canvas/ui/NodePromptInput.tsx`
 - `src/features/canvas/ui/NodeActionToolbar.tsx`
@@ -86,6 +88,21 @@
 - 使用 DTO/纯数据对象，避免双向引用。
 - Store 不应直接承担重业务逻辑；业务逻辑放应用层。
 
+### 4.6 文档边界
+
+- 本文档定位为“技术开发规范文档”，优先记录稳定的架构约束、分层规则、扩展流程、验证标准。
+- 不记录易变的具体 UI 操作步骤、临时交互文案或产品走查细节（这些应放在需求文档/设计稿/任务说明中）。
+- 当实现变化仅影响交互细节而不影响技术约束时，可不更新本文档。
+
+### 4.5 节点注册单一真相源
+
+- 节点类型、默认数据、菜单展示、连线能力统一在 `domain/nodeRegistry.ts` 声明，不在 `Canvas.tsx` / `canvasStore.ts` 重复硬编码。
+- `connectivity` 为连线能力配置源：
+  - `sourceHandle` / `targetHandle`：是否具备输入输出端口。
+  - `connectMenu.fromSource` / `connectMenu.fromTarget`：从输出端或输入端拉线时，是否允许出现在“创建节点菜单”。
+- 菜单候选节点必须由注册表函数统一推导（如 `getConnectMenuNodeTypes`），禁止在 UI 层手写类型白名单。
+- 内部衍生节点（如切割结果 `storyboardSplit`、导出节点）默认 `connectMenu` 关闭，只能由应用流程自动创建。
+
 ## 5. UI/交互规范
 
 - 复用统一 UI 组件：`src/components/ui/primitives.tsx`。
@@ -93,6 +110,7 @@
 - 输入框、工具条、弹窗保持与节点对齐，交互动画保持一致。
 - 对话框支持“打开/关闭”过渡，避免突兀闪烁。
 - 明暗主题要可读，避免高饱和蓝色抢占焦点（导航图已优化为灰黑系）。
+- 快捷键应避开输入态（`input/textarea/contentEditable`）避免误触。
 
 ## 6. 命令与验证
 
@@ -157,6 +175,16 @@ npm run build
 3. 在 `ui/tool-editors/` 新增对应编辑器。
 4. 在 `application/toolProcessor.ts` 接入执行逻辑。
 5. 保证产物仍走“处理后生成新节点”链路，不覆盖原节点。
+
+### 8.3 新节点接入
+
+1. 在 `domain/canvasNodes.ts` 增加类型与数据结构（必要时增加类型守卫）。
+2. 在 `domain/nodeRegistry.ts` 注册定义：`createDefaultData`、`capabilities`、`connectivity`。
+3. 在 `nodes/index.ts` 注册渲染组件。
+4. 明确手动创建策略：
+   - 可手动创建：配置 `connectMenu.fromSource/fromTarget`。
+   - 仅流程创建：关闭 `connectMenu`，由工具/应用服务触发。
+5. 如新增分组/父子节点行为，必须同步验证删除、解组、连线清理与历史快照。
 
 ## 9. 持久化规范
 

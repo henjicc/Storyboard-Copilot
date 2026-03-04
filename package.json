@@ -25,6 +25,8 @@
     "react-i18next": "^15.4.1",
     "react-image-crop": "^11.0.10",
     "react-konva": "^18.2.10",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "uuid": "^11.1.0",
     "zustand": "^5.0.3"
   },

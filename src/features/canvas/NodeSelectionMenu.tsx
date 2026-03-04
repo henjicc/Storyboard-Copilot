@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Upload, Sparkles, LayoutGrid } from 'lucide-react';
+import { Image, Upload, Sparkles, LayoutGrid, Type } from 'lucide-react';
 
 import type { CanvasNodeType } from '@/features/canvas/domain/canvasNodes';
 import { nodeCatalog } from '@/features/canvas/application/nodeCatalog';
@@ -17,6 +17,7 @@ const iconMap: Record<MenuIconKey, typeof Upload> = {
   upload: Upload,
   sparkles: Sparkles,
   layout: LayoutGrid,
+  text: Type,
 };
 
 export function NodeSelectionMenu({
@@ -35,12 +36,25 @@ export function NodeSelectionMenu({
   );
 
   const menuItems = useMemo(() => {
-    if (!allowedTypeSet || !allowedTypes) {
-      return nodeCatalog.getMenuDefinitions();
+    const candidates = !allowedTypeSet || !allowedTypes
+      ? nodeCatalog.getMenuDefinitions()
+      : Array.from(new Set(allowedTypes)).map((type) => nodeCatalog.getDefinition(type));
+
+    const dedupedByLabel = new Map<string, (typeof candidates)[number]>();
+    for (const definition of candidates) {
+      const existing = dedupedByLabel.get(definition.menuLabelKey);
+      if (!existing) {
+        dedupedByLabel.set(definition.menuLabelKey, definition);
+        continue;
+      }
+
+      // Prefer user-visible definitions when multiple internal node types share the same label.
+      if (!existing.visibleInMenu && definition.visibleInMenu) {
+        dedupedByLabel.set(definition.menuLabelKey, definition);
+      }
     }
 
-    const dedupedTypes = Array.from(new Set(allowedTypes));
-    return dedupedTypes.map((type) => nodeCatalog.getDefinition(type));
+    return Array.from(dedupedByLabel.values());
   }, [allowedTypeSet, allowedTypes]);
 
   useEffect(() => {

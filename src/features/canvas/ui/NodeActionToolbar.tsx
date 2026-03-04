@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NodeToolbar as ReactFlowNodeToolbar, Position } from '@xyflow/react';
-import { Copy, Crop, Download, FolderOpen, PenLine, RefreshCw, Scissors, Trash2 } from 'lucide-react';
+import { Copy, Crop, Download, FolderOpen, PenLine, RefreshCw, Scissors, Trash2, Unlink2 } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 
 import {
   isExportImageNode,
+  isGroupNode,
   isImageEditNode,
   isUploadNode,
   type CanvasNode,
@@ -34,6 +35,7 @@ const toolIconMap: Record<ToolIconKey, typeof Crop> = {
 export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
   const tools = useMemo(() => getNodeToolPlugins(node), [node]);
   const deleteNode = useCanvasStore((state) => state.deleteNode);
+  const ungroupNode = useCanvasStore((state) => state.ungroupNode);
   const canReupload = isUploadNode(node) && Boolean(node.data.imageUrl);
   const downloadPresetPaths = useSettingsStore((state) => state.downloadPresetPaths);
   const [downloadMenu, setDownloadMenu] = useState<{ x: number; y: number } | null>(null);
@@ -188,6 +190,20 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
           >
             <Download className="h-3.5 w-3.5" />
             下载
+          </UiChipButton>
+        )}
+        {isGroupNode(node) && (
+          <UiChipButton
+            key="group-ungroup"
+            className="h-8 rounded-full border-amber-500/45 bg-amber-500/15 px-2.5 text-xs text-amber-300 hover:bg-amber-500/25"
+            onClick={(event) => {
+              event.stopPropagation();
+              setDownloadMenu(null);
+              ungroupNode(node.id);
+            }}
+          >
+            <Unlink2 className="h-3.5 w-3.5" />
+            解散
           </UiChipButton>
         )}
         <UiChipButton

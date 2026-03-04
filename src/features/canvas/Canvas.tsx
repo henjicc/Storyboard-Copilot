@@ -11,6 +11,7 @@ import {
   Background,
   MiniMap,
   BackgroundVariant,
+  SelectionMode,
   useReactFlow,
   type Connection,
   type EdgeChange,
@@ -26,11 +27,11 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { canvasEventBus } from '@/features/canvas/application/canvasServices';
 import {
-  CANVAS_NODE_TYPES,
   type CanvasEdge,
   type CanvasNode,
   type CanvasNodeType,
 } from '@/features/canvas/domain/canvasNodes';
+import { getConnectMenuNodeTypes } from '@/features/canvas/domain/nodeRegistry';
 import { nodeTypes } from './nodes';
 import { edgeTypes } from './edges';
 import { NodeSelectionMenu } from './NodeSelectionMenu';
@@ -38,19 +39,6 @@ import { SelectedNodeOverlay } from './ui/SelectedNodeOverlay';
 import { NodeToolDialog } from './ui/NodeToolDialog';
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
-const NODE_TYPES_WITH_SOURCE_HANDLE: CanvasNodeType[] = [
-  CANVAS_NODE_TYPES.upload,
-  CANVAS_NODE_TYPES.exportImage,
-  CANVAS_NODE_TYPES.imageEdit,
-  CANVAS_NODE_TYPES.storyboardSplit,
-  CANVAS_NODE_TYPES.storyboardGen,
-];
-const NODE_TYPES_WITH_TARGET_HANDLE: CanvasNodeType[] = [
-  CANVAS_NODE_TYPES.exportImage,
-  CANVAS_NODE_TYPES.imageEdit,
-  CANVAS_NODE_TYPES.storyboardSplit,
-  CANVAS_NODE_TYPES.storyboardGen,
-];
 
 interface PendingConnectStart {
   nodeId: string;
@@ -69,10 +57,7 @@ interface PreviewConnectionVisual {
 }
 
 function resolveAllowedNodeTypes(handleType: HandleType): CanvasNodeType[] {
-  if (handleType === 'source') {
-    return NODE_TYPES_WITH_TARGET_HANDLE;
-  }
-  return NODE_TYPES_WITH_SOURCE_HANDLE;
+  return getConnectMenuNodeTypes(handleType);
 }
 
 function getClientPosition(event: MouseEvent | TouchEvent): { x: number; y: number } | null {
@@ -139,6 +124,8 @@ export function Canvas() {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const deleteNode = useCanvasStore((state) => state.deleteNode);
+  const deleteNodes = useCanvasStore((state) => state.deleteNodes);
+  const groupNodes = useCanvasStore((state) => state.groupNodes);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const openToolDialog = useCanvasStore((state) => state.openToolDialog);
@@ -239,12 +226,26 @@ export function Canvas() {
           'dragging' in change &&
           change.dragging === false
       );
+      const hasResizeMove = changes.some(
+        (change) =>
+          change.type === 'dimensions' &&
+          'resizing' in change &&
+          Boolean(change.resizing)
+      );
+      const hasResizeEnd = changes.some(
+        (change) =>
+          change.type === 'dimensions' &&
+          'resizing' in change &&
+          change.resizing === false
+      );
+      const hasInteractionMove = hasDragMove || hasResizeMove;
+      const hasInteractionEnd = hasDragEnd || hasResizeEnd;
 
-      if (hasDragMove) {
+      if (hasInteractionMove) {
         return;
       }
 
-      if (hasDragEnd) {
+      if (hasInteractionEnd) {
         scheduleCanvasPersist(0);
         return;
       }
@@ -285,39 +286,26 @@ export function Canvas() {
     cancelPendingViewportPersist();
   }, [cancelPendingViewportPersist]);
 
+  const selectedNodeIds = useMemo(
+    () => nodes.filter((node) => Boolean(node.selected)).map((node) => node.id),
+    [nodes]
+  );
+
+  useEffect(() => {
+    if (selectedNodeIds.length === 1) {
+      if (selectedNodeId !== selectedNodeIds[0]) {
+        setSelectedNode(selectedNodeIds[0]);
+      }
+      return;
+    }
+
+    if (selectedNodeId !== null) {
+      setSelectedNode(null);
+    }
+  }, [selectedNodeId, selectedNodeIds, setSelectedNode]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' || !selectedNodeId) {
-        const commandPressed = event.ctrlKey || event.metaKey;
-        const key = event.key.toLowerCase();
-        const isUndo = commandPressed && key === 'z' && !event.shiftKey;
-        const isRedo = commandPressed && (key === 'y' || (key === 'z' && event.shiftKey));
-
-        if (!isUndo && !isRedo) {
-          return;
-        }
-
-        const target = event.target as HTMLElement | null;
-        if (target) {
-          const tagName = target.tagName.toLowerCase();
-          const isTypingElement =
-            tagName === 'input' ||
-            tagName === 'textarea' ||
-            target.isContentEditable;
-
-          if (isTypingElement) {
-            return;
-          }
-        }
-
-        event.preventDefault();
-        const changed = isUndo ? undo() : redo();
-        if (changed) {
-          scheduleCanvasPersist(0);
-        }
-        return;
-      }
-
       const target = event.target as HTMLElement | null;
       if (target) {
         const tagName = target.tagName.toLowerCase();
@@ -331,8 +319,52 @@ export function Canvas() {
         }
       }
 
+      const commandPressed = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      const isUndo = commandPressed && key === 'z' && !event.shiftKey;
+      const isRedo = commandPressed && (key === 'y' || (key === 'z' && event.shiftKey));
+      const isGroup = commandPressed && key === 'g';
+
+      if (isUndo || isRedo) {
+        event.preventDefault();
+        const changed = isUndo ? undo() : redo();
+        if (changed) {
+          scheduleCanvasPersist(0);
+        }
+        return;
+      }
+
+      if (isGroup) {
+        if (selectedNodeIds.length < 2) {
+          return;
+        }
+        event.preventDefault();
+        const createdGroupId = groupNodes(selectedNodeIds);
+        if (createdGroupId) {
+          scheduleCanvasPersist(0);
+        }
+        return;
+      }
+
+      if (event.key !== 'Delete' && event.key !== 'Backspace') {
+        return;
+      }
+
+      const idsToDelete = selectedNodeIds.length > 0
+        ? selectedNodeIds
+        : selectedNodeId
+          ? [selectedNodeId]
+          : [];
+      if (idsToDelete.length === 0) {
+        return;
+      }
+
       event.preventDefault();
-      deleteNode(selectedNodeId);
+      if (idsToDelete.length === 1) {
+        deleteNode(idsToDelete[0]);
+      } else {
+        deleteNodes(idsToDelete);
+      }
       scheduleCanvasPersist(0);
     };
 
@@ -340,7 +372,16 @@ export function Canvas() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedNodeId, deleteNode, undo, redo, scheduleCanvasPersist]);
+  }, [
+    selectedNodeId,
+    selectedNodeIds,
+    deleteNode,
+    deleteNodes,
+    groupNodes,
+    undo,
+    redo,
+    scheduleCanvasPersist,
+  ]);
 
   const handlePaneClick = useCallback(() => {
     if (suppressNextPaneClickRef.current) {
@@ -550,6 +591,10 @@ export function Canvas() {
         defaultViewport={DEFAULT_VIEWPORT}
         minZoom={0.1}
         maxZoom={5}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode={['Control', 'Meta']}
+        selectionKeyCode={['Control', 'Meta']}
         onlyRenderVisibleElements
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}

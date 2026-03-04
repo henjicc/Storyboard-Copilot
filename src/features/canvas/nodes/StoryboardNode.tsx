@@ -14,6 +14,7 @@ import {
   mergeStoryboardImages,
   type MergeStoryboardImagesResult,
 } from '@/commands/image';
+import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
 import type {
   CanvasNode,
   StoryboardExportOptions,
@@ -44,6 +45,23 @@ const STORYBOARD_NODE_WIDTH_PX = 318;
 const STORYBOARD_GRID_GAP_PX = 1;
 const EXPORT_MAX_DIMENSION = 4096;
 const EXPORT_TRACE_PREFIX = '[StoryboardExport]';
+const STORYBOARD_SPLIT_HEADER_ADJUST = { x: 0, y: 0, scale: 1 };
+const STORYBOARD_SPLIT_ICON_ADJUST = { x: 0, y: 0, scale: 1 };
+const STORYBOARD_SPLIT_TITLE_ADJUST = { x: 0, y: 0, scale: 1 };
+
+function SplitResultIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M10 0c1.66 0 3 1.34 3 3v3l2.4-1.5a3.003 3.003 0 0 1 3 5.2a3.003 3.003 0 0 1-4.452-2.051l-.952.55v6.8h-2v-5.65l-4.01 2.32l-.988-1.73l5-2.94v-1.17a2.996 2.996 0 0 1-4-2.829c0-1.66 1.34-3 3-3zM9 3a1 1 0 0 0 2 0a1 1 0 0 0-2 0m7 4a1 1 0 0 0 2 0a1 1 0 0 0-2 0M2.97 19h2v-2h-2V9h3V7h-3c-1.1 0-2 .895-2 2v8c0 1.1.895 2 2 2m6 0h-2v-2h2zm4-2c0 1.1-.895 2-2 2v-2z" />
+    </svg>
+  );
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -260,10 +278,10 @@ const FrameCard = memo(
         }}
         onMouseDown={(event) => event.stopPropagation()}
         className={`nodrag relative bg-bg-dark/85 transition-all ${dragging
-            ? 'z-10 opacity-55 ring-1 ring-accent/65'
-            : asDropTarget
-              ? 'z-10 ring-1 ring-emerald-400/70'
-              : ''
+          ? 'z-10 opacity-55 ring-1 ring-accent/65'
+          : asDropTarget
+            ? 'z-10 ring-1 ring-emerald-400/70'
+            : ''
           }`}
       >
         <div
@@ -744,7 +762,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
     <div
       ref={rootRef}
       className={`
-        rounded-[var(--node-radius)] border bg-surface-dark/90 p-2 transition-all duration-150
+        relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/90 p-2 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
@@ -752,12 +770,18 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
       style={{ width: `${STORYBOARD_NODE_WIDTH_PX}px` }}
       onClick={() => setSelectedNode(id)}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div>
-          <div className="text-xs text-text-muted">切割结果</div>
-          <div className="text-[11px] text-text-muted/80">
-            {gridRows} x {gridCols} | {totalFrames} 格 | 单格约 {gridMetrics.cellWidth} x {gridMetrics.cellHeight}px
-          </div>
+      <NodeHeader
+        className={NODE_HEADER_FLOATING_POSITION_CLASS}
+        icon={<SplitResultIcon className="h-3.5 w-3.5" />}
+        titleText="切割结果"
+        headerAdjust={STORYBOARD_SPLIT_HEADER_ADJUST}
+        iconAdjust={STORYBOARD_SPLIT_ICON_ADJUST}
+        titleAdjust={STORYBOARD_SPLIT_TITLE_ADJUST}
+      />
+
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <div className="text-[11px] text-text-muted/80">
+          {gridRows} x {gridCols} | {totalFrames} 格 | 单格约 {gridMetrics.cellWidth} x {gridMetrics.cellHeight}px
         </div>
         <UiButton
           size="sm"

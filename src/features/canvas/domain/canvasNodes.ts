@@ -4,6 +4,8 @@ export const CANVAS_NODE_TYPES = {
   upload: 'uploadNode',
   imageEdit: 'imageNode',
   exportImage: 'exportImageNode',
+  textAnnotation: 'textAnnotationNode',
+  group: 'groupNode',
   storyboardSplit: 'storyboardNode',
   storyboardGen: 'storyboardGenNode',
 } as const;
@@ -35,6 +37,15 @@ export interface NodeImageData {
 
 export interface UploadImageNodeData extends NodeImageData {}
 export interface ExportImageNodeData extends NodeImageData {}
+export interface GroupNodeData {
+  label: string;
+  [key: string]: unknown;
+}
+
+export interface TextAnnotationNodeData {
+  content: string;
+  [key: string]: unknown;
+}
 
 export interface ImageEditNodeData extends NodeImageData {
   prompt: string;
@@ -103,6 +114,8 @@ export interface StoryboardGenNodeData {
 export type CanvasNodeData =
   | UploadImageNodeData
   | ExportImageNodeData
+  | TextAnnotationNodeData
+  | GroupNodeData
   | ImageEditNodeData
   | StoryboardSplitNodeData
   | StoryboardGenNodeData;
@@ -152,6 +165,18 @@ export function isExportImageNode(
   node: CanvasNode | null | undefined
 ): node is Node<ExportImageNodeData, typeof CANVAS_NODE_TYPES.exportImage> {
   return node?.type === CANVAS_NODE_TYPES.exportImage;
+}
+
+export function isGroupNode(
+  node: CanvasNode | null | undefined
+): node is Node<GroupNodeData, typeof CANVAS_NODE_TYPES.group> {
+  return node?.type === CANVAS_NODE_TYPES.group;
+}
+
+export function isTextAnnotationNode(
+  node: CanvasNode | null | undefined
+): node is Node<TextAnnotationNodeData, typeof CANVAS_NODE_TYPES.textAnnotation> {
+  return node?.type === CANVAS_NODE_TYPES.textAnnotation;
 }
 
 export function isStoryboardSplitNode(

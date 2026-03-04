@@ -36,6 +36,7 @@ import { ModelParamsControls } from '@/features/canvas/ui/ModelParamsControls';
 import {
   UiButton,
 } from '@/components/ui';
+import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
 
 type StoryboardGenNodeProps = {
   id: string;
@@ -58,6 +59,9 @@ const STORYBOARD_GRID_GAP_PX = 2;
 const STORYBOARD_GRID_BASE_CELL_HEIGHT_PX = 78;
 const STORYBOARD_GRID_MAX_WIDTH_PX = 320;
 const STORYBOARD_CONTROL_ROW_WIDTH_PX = 274;
+const STORYBOARD_GEN_HEADER_ADJUST = { x: 0, y: 0, scale: 1 };
+const STORYBOARD_GEN_ICON_ADJUST = { x: 0, y: 0, scale: 0.95 };
+const STORYBOARD_GEN_TITLE_ADJUST = { x: 0, y: 0, scale: 1 };
 
 function pickClosestAspectRatio(
   targetRatio: number,
@@ -464,7 +468,7 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     <div
       ref={rootRef}
       className={`
-        rounded-[var(--node-radius)] border bg-surface-dark/95 p-3 transition-all duration-150
+        relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/95 p-3 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'
@@ -473,12 +477,17 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
       style={{ width: `${frameLayout.nodeWidth}px` }}
       onClick={() => setSelectedNode(id)}
     >
-      {/* Header */}
-      <div className="mb-3 flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-accent" />
-        <span className="text-sm font-medium text-text-dark">分镜生成</span>
-        <span className="text-xs text-text-muted">{totalFrames} 格</span>
-      </div>
+      {/* Floating title */}
+      <NodeHeader
+        className={NODE_HEADER_FLOATING_POSITION_CLASS}
+        icon={<Sparkles className="h-4 w-4" />}
+        titleText="分镜生成"
+        headerAdjust={STORYBOARD_GEN_HEADER_ADJUST}
+        iconAdjust={STORYBOARD_GEN_ICON_ADJUST}
+        titleAdjust={STORYBOARD_GEN_TITLE_ADJUST}
+      />
+
+      <div className="mb-3 text-xs text-text-muted">{totalFrames} 格</div>
 
       {/* Grid Settings */}
       <div className="mb-2 flex items-center gap-2">

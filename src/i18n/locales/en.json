@@ -54,6 +54,10 @@
       "rows": "Rows",
       "cols": "Columns",
       "frameIndex": "Frame {{index}}"
+    },
+    "textAnnotation": {
+      "placeholder": "Write Markdown text. It will render when unselected.",
+      "empty": "Empty note"
     }
   },
   "split": {
