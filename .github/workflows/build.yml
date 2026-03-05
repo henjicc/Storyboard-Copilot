@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (example: v0.1.0). Leave empty to skip release job.'
+        required: false
+        type: string
 
 jobs:
   build-windows:
@@ -33,10 +38,16 @@ jobs:
           arch: amd64
 
       - name: Update version
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
         shell: pwsh
         run: |
-          $VERSION = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $VERSION = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          } elseif ("${{ github.event.inputs.release_tag }}" -like 'v*') {
+            $VERSION = "${{ github.event.inputs.release_tag }}" -replace '^v', ''
+          } else {
+            throw "Invalid release_tag. Use format like v0.1.0"
+          }
           $CURRENT = (Get-Content package.json | ConvertFrom-Json).version
           if ($CURRENT -ne $VERSION) {
             npm version $VERSION --no-git-tag-version
@@ -54,6 +65,8 @@ jobs:
           $RELEASE_APP_NAME = "Storyboard-Copilot"
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $VERSION = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          } elseif ("${{ github.event.inputs.release_tag }}" -like 'v*') {
+            $VERSION = "${{ github.event.inputs.release_tag }}" -replace '^v', ''
           } else {
             $VERSION = (Get-Content package.json | ConvertFrom-Json).version
           }
@@ -98,9 +111,17 @@ jobs:
           workspaces: src-tauri
 
       - name: Update version
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event.inputs.release_tag }}" == v* ]]; then
+            VERSION=${{ github.event.inputs.release_tag }}
+            VERSION=${VERSION#v}
+          else
+            echo "Invalid release_tag. Use format like v0.1.0"
+            exit 1
+          fi
           CURRENT=$(node -p "require('./package.json').version")
           if [ "$CURRENT" != "$VERSION" ]; then
             echo "Updating package.json version from $CURRENT to $VERSION"
@@ -123,6 +144,9 @@ jobs:
           RELEASE_APP_NAME="Storyboard-Copilot"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event.inputs.release_tag }}" == v* ]]; then
+            VERSION=${{ github.event.inputs.release_tag }}
+            VERSION=${VERSION#v}
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
@@ -151,12 +175,27 @@ jobs:
           if-no-files-found: warn
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Resolve release tag
+        id: resolve_tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.event.inputs.release_tag }}"
+          fi
+          if [[ -z "$TAG" || "$TAG" != v* ]]; then
+            echo "Invalid release tag: $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
@@ -172,6 +211,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: |
             artifacts/windows/*.exe
             artifacts/macos/*.dmg
