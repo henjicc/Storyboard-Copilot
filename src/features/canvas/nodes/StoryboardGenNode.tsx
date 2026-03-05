@@ -35,6 +35,10 @@ import {
   resolveImageDisplayUrl,
 } from '@/features/canvas/application/imageData';
 import {
+  sanitizeStoryboardPromptText,
+  sanitizeStoryboardText,
+} from '@/features/canvas/application/storyboardText';
+import {
   insertReferenceToken,
   removeTextRange,
   resolveReferenceAwareDeleteRange,
@@ -458,6 +462,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const storyboardGenDisableTextInImage = useSettingsStore(
     (state) => state.storyboardGenDisableTextInImage
   );
+  const ignoreAtTagWhenCopyingAndGenerating = useSettingsStore(
+    (state) => state.ignoreAtTagWhenCopyingAndGenerating
+  );
 
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -745,7 +752,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
     frames.forEach((frame, index) => {
       const frameDescription = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
-      const sanitizedDescription = frameDescription.replace(/@(?=图\d+)/g, '').trim();
+      const sanitizedDescription = sanitizeStoryboardPromptText(frameDescription);
       if (!sanitizedDescription) {
         return;
       }
@@ -850,7 +857,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         .slice(0, nodeData.gridRows * nodeData.gridCols)
         .map((frame) => {
           const description = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
-          return description.replace(/@(?=图\d+)/g, '').trim();
+          return sanitizeStoryboardText(description, ignoreAtTagWhenCopyingAndGenerating);
         });
       const imageWithMetadata = await embedStoryboardImageMetadata(prepared.imageUrl, {
         gridRows: nodeData.gridRows,
@@ -899,6 +906,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     findNodePosition,
     updateNodeData,
     frameAspectRatioValue,
+    ignoreAtTagWhenCopyingAndGenerating,
   ]);
 
   const handleRowChange = useCallback(

@@ -188,6 +188,8 @@
     "storyboardGenKeepStyleConsistentDesc": "When enabled, storyboard generation prompt appends \"图片风格与参考图保持一致\".",
     "storyboardGenDisableTextInImage": "Disallow descriptive text in storyboard image",
     "storyboardGenDisableTextInImageDesc": "When enabled, storyboard generation prompt appends \"禁止添加描述文本\".",
+    "ignoreAtTagWhenCopyingAndGenerating": "Ignore @ tags when copying/saving text",
+    "ignoreAtTagWhenCopyingAndGeneratingDesc": "When enabled, copied text and embedded storyboard metadata remove tags like \"@图1\"; generation requests only remove \"@\" and keep \"图1\".",
     "useUploadFilenameAsNodeTitle": "Use uploaded filename as node title",
     "useUploadFilenameAsNodeTitleDesc": "When enabled, newly uploaded images use the file name as the node title by default (still editable via double-click).",
     "downloadPathPlaceholder": "Input folder path, e.g. /Users/name/Pictures/Storyboard or D:\\\\Images\\\\Storyboard",

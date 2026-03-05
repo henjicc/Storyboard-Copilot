@@ -27,6 +27,7 @@ import {
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { UI_POPOVER_TRANSITION_MS } from '@/components/ui/motion';
+import { sanitizeStoryboardText } from '@/features/canvas/application/storyboardText';
 import {
   NODE_TOOLBAR_ALIGN,
   NODE_TOOLBAR_CLASS,
@@ -59,6 +60,9 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
   const ungroupNode = useCanvasStore((state) => state.ungroupNode);
   const canReupload = isUploadNode(node) && Boolean(node.data.imageUrl);
   const downloadPresetPaths = useSettingsStore((state) => state.downloadPresetPaths);
+  const ignoreAtTagWhenCopyingAndGenerating = useSettingsStore(
+    (state) => state.ignoreAtTagWhenCopyingAndGenerating
+  );
   const [downloadMenu, setDownloadMenu] = useState<{ x: number; y: number } | null>(null);
   const [isDownloadMenuVisible, setIsDownloadMenuVisible] = useState(false);
   const [isCopySuccess, setIsCopySuccess] = useState(false);
@@ -174,7 +178,10 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
       return node.data.frames
         .map((frame, index) => t('nodeToolbar.storyboardLine', {
           index: String(index + 1).padStart(2, '0'),
-          content: frame.description?.trim() ?? '',
+          content: sanitizeStoryboardText(
+            frame.description ?? '',
+            ignoreAtTagWhenCopyingAndGenerating
+          ),
         }))
         .join('\n');
     }
@@ -183,12 +190,12 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
       return orderedFrames
         .map((frame, index) => t('nodeToolbar.storyboardLine', {
           index: String(index + 1).padStart(2, '0'),
-          content: frame.note?.trim() ?? '',
+          content: sanitizeStoryboardText(frame.note ?? '', ignoreAtTagWhenCopyingAndGenerating),
         }))
         .join('\n');
     }
     return '';
-  }, [isStoryboardGen, isStoryboardSplit, node, t, i18n.language]);
+  }, [ignoreAtTagWhenCopyingAndGenerating, isStoryboardGen, isStoryboardSplit, node, t, i18n.language]);
 
   const handleCopyStoryboardText = useCallback(async () => {
     if (!storyboardText) {

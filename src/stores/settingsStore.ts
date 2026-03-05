@@ -11,6 +11,7 @@ interface SettingsState {
   useUploadFilenameAsNodeTitle: boolean;
   storyboardGenKeepStyleConsistent: boolean;
   storyboardGenDisableTextInImage: boolean;
+  ignoreAtTagWhenCopyingAndGenerating: boolean;
   uiRadiusPreset: UiRadiusPreset;
   themeTonePreset: ThemeTonePreset;
   accentColor: string;
@@ -19,6 +20,7 @@ interface SettingsState {
   setUseUploadFilenameAsNodeTitle: (enabled: boolean) => void;
   setStoryboardGenKeepStyleConsistent: (enabled: boolean) => void;
   setStoryboardGenDisableTextInImage: (enabled: boolean) => void;
+  setIgnoreAtTagWhenCopyingAndGenerating: (enabled: boolean) => void;
   setUiRadiusPreset: (preset: UiRadiusPreset) => void;
   setThemeTonePreset: (preset: ThemeTonePreset) => void;
   setAccentColor: (color: string) => void;
@@ -62,6 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       useUploadFilenameAsNodeTitle: true,
       storyboardGenKeepStyleConsistent: true,
       storyboardGenDisableTextInImage: true,
+      ignoreAtTagWhenCopyingAndGenerating: true,
       uiRadiusPreset: 'default',
       themeTonePreset: 'neutral',
       accentColor: '#3B82F6',
@@ -83,30 +86,37 @@ export const useSettingsStore = create<SettingsState>()(
         set({ storyboardGenKeepStyleConsistent: enabled }),
       setStoryboardGenDisableTextInImage: (enabled) =>
         set({ storyboardGenDisableTextInImage: enabled }),
+      setIgnoreAtTagWhenCopyingAndGenerating: (enabled) =>
+        set({ ignoreAtTagWhenCopyingAndGenerating: enabled }),
       setUiRadiusPreset: (uiRadiusPreset) => set({ uiRadiusPreset }),
       setThemeTonePreset: (themeTonePreset) => set({ themeTonePreset }),
       setAccentColor: (color) => set({ accentColor: normalizeHexColor(color) }),
     }),
     {
       name: 'settings-storage',
-      version: 2,
+      version: 3,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as {
           apiKey?: string;
           apiKeys?: ProviderApiKeys;
+          ignoreAtTagWhenCopyingAndGenerating?: boolean;
         };
 
         const migratedApiKeys = normalizeApiKeys(state.apiKeys);
+        const ignoreAtTagWhenCopyingAndGenerating =
+          state.ignoreAtTagWhenCopyingAndGenerating ?? true;
         if (Object.keys(migratedApiKeys).length > 0) {
           return {
             ...(persistedState as object),
             apiKeys: migratedApiKeys,
+            ignoreAtTagWhenCopyingAndGenerating,
           };
         }
 
         return {
           ...(persistedState as object),
           apiKeys: state.apiKey ? { ppio: normalizeApiKey(state.apiKey) } : {},
+          ignoreAtTagWhenCopyingAndGenerating,
         };
       },
     }

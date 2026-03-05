@@ -24,6 +24,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     useUploadFilenameAsNodeTitle,
     storyboardGenKeepStyleConsistent,
     storyboardGenDisableTextInImage,
+    ignoreAtTagWhenCopyingAndGenerating,
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
@@ -32,6 +33,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setUseUploadFilenameAsNodeTitle,
     setStoryboardGenKeepStyleConsistent,
     setStoryboardGenDisableTextInImage,
+    setIgnoreAtTagWhenCopyingAndGenerating,
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
@@ -50,6 +52,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [localStoryboardGenDisableTextInImage, setLocalStoryboardGenDisableTextInImage] = useState(
     storyboardGenDisableTextInImage
   );
+  const [localIgnoreAtTagWhenCopyingAndGenerating, setLocalIgnoreAtTagWhenCopyingAndGenerating] =
+    useState(ignoreAtTagWhenCopyingAndGenerating);
   const [localUiRadiusPreset, setLocalUiRadiusPreset] = useState(uiRadiusPreset);
   const [localThemeTonePreset, setLocalThemeTonePreset] = useState(themeTonePreset);
   const [localAccentColor, setLocalAccentColor] = useState(accentColor);
@@ -85,6 +89,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setLocalUseUploadFilenameAsNodeTitle(useUploadFilenameAsNodeTitle);
     setLocalStoryboardGenKeepStyleConsistent(storyboardGenKeepStyleConsistent);
     setLocalStoryboardGenDisableTextInImage(storyboardGenDisableTextInImage);
+    setLocalIgnoreAtTagWhenCopyingAndGenerating(ignoreAtTagWhenCopyingAndGenerating);
     setLocalUiRadiusPreset(uiRadiusPreset);
     setLocalThemeTonePreset(themeTonePreset);
     setLocalAccentColor(accentColor);
@@ -97,6 +102,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     useUploadFilenameAsNodeTitle,
     storyboardGenKeepStyleConsistent,
     storyboardGenDisableTextInImage,
+    ignoreAtTagWhenCopyingAndGenerating,
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
@@ -110,6 +116,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setUseUploadFilenameAsNodeTitle(localUseUploadFilenameAsNodeTitle);
     setStoryboardGenKeepStyleConsistent(localStoryboardGenKeepStyleConsistent);
     setStoryboardGenDisableTextInImage(localStoryboardGenDisableTextInImage);
+    setIgnoreAtTagWhenCopyingAndGenerating(localIgnoreAtTagWhenCopyingAndGenerating);
     setUiRadiusPreset(localUiRadiusPreset);
     setThemeTonePreset(localThemeTonePreset);
     setAccentColor(localAccentColor);
@@ -120,6 +127,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     localUseUploadFilenameAsNodeTitle,
     localStoryboardGenKeepStyleConsistent,
     localStoryboardGenDisableTextInImage,
+    localIgnoreAtTagWhenCopyingAndGenerating,
     localUiRadiusPreset,
     localThemeTonePreset,
     localAccentColor,
@@ -129,6 +137,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setUseUploadFilenameAsNodeTitle,
     setStoryboardGenKeepStyleConsistent,
     setStoryboardGenDisableTextInImage,
+    setIgnoreAtTagWhenCopyingAndGenerating,
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
@@ -465,6 +474,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       </h3>
                       <p className="mt-1 text-xs text-text-muted">
                         {t('settings.storyboardGenKeepStyleConsistentDesc')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
+                  <div className="flex items-start gap-3">
+                    <UiCheckbox
+                      checked={localIgnoreAtTagWhenCopyingAndGenerating}
+                      onCheckedChange={(checked) =>
+                        setLocalIgnoreAtTagWhenCopyingAndGenerating(checked)
+                      }
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <h3 className="text-sm font-medium text-text-dark">
+                        {t('settings.ignoreAtTagWhenCopyingAndGenerating')}
+                      </h3>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {t('settings.ignoreAtTagWhenCopyingAndGeneratingDesc')}
                       </p>
                     </div>
                   </div>
