@@ -13,7 +13,7 @@
 ## 下载
 
 <div align="center">
-Windows 用户请下载 <strong>.msi</strong> 文件，macOS 用户请下载 <strong>.dmg</strong> 文件
+Windows 用户请下载 <strong>.exe</strong> 文件，macOS 用户请下载 <strong>.dmg</strong> 文件
 
 Windows 用户如果在启动时遇到了报错，请尝试安装 [WebView2 运行时](https://developer.microsoft.com/zh-cn/Microsoft-edge/webview2#download)
 
