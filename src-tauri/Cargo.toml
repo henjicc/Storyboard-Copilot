@@ -1,6 +1,6 @@
 [package]
 name = "storyboard-copilot"
-version = "0.1.6"
+version = "0.1.7"
 description = "分镜助手 - AI图像生成与分镜工具"
 authors = ["you"]
 edition = "2021"
