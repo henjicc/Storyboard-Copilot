@@ -15,7 +15,10 @@ interface SettingsState {
   useUploadFilenameAsNodeTitle: boolean;
   storyboardGenKeepStyleConsistent: boolean;
   storyboardGenDisableTextInImage: boolean;
+  storyboardGenAutoInferEmptyFrame: boolean;
   ignoreAtTagWhenCopyingAndGenerating: boolean;
+  enableStoryboardGenGridPreviewShortcut: boolean;
+  showStoryboardGenAdvancedRatioControls: boolean;
   uiRadiusPreset: UiRadiusPreset;
   themeTonePreset: ThemeTonePreset;
   accentColor: string;
@@ -29,7 +32,10 @@ interface SettingsState {
   setUseUploadFilenameAsNodeTitle: (enabled: boolean) => void;
   setStoryboardGenKeepStyleConsistent: (enabled: boolean) => void;
   setStoryboardGenDisableTextInImage: (enabled: boolean) => void;
+  setStoryboardGenAutoInferEmptyFrame: (enabled: boolean) => void;
   setIgnoreAtTagWhenCopyingAndGenerating: (enabled: boolean) => void;
+  setEnableStoryboardGenGridPreviewShortcut: (enabled: boolean) => void;
+  setShowStoryboardGenAdvancedRatioControls: (enabled: boolean) => void;
   setUiRadiusPreset: (preset: UiRadiusPreset) => void;
   setThemeTonePreset: (preset: ThemeTonePreset) => void;
   setAccentColor: (color: string) => void;
@@ -95,7 +101,10 @@ export const useSettingsStore = create<SettingsState>()(
       useUploadFilenameAsNodeTitle: true,
       storyboardGenKeepStyleConsistent: true,
       storyboardGenDisableTextInImage: true,
+      storyboardGenAutoInferEmptyFrame: true,
       ignoreAtTagWhenCopyingAndGenerating: true,
+      enableStoryboardGenGridPreviewShortcut: false,
+      showStoryboardGenAdvancedRatioControls: false,
       uiRadiusPreset: 'default',
       themeTonePreset: 'neutral',
       accentColor: '#3B82F6',
@@ -125,8 +134,14 @@ export const useSettingsStore = create<SettingsState>()(
         set({ storyboardGenKeepStyleConsistent: enabled }),
       setStoryboardGenDisableTextInImage: (enabled) =>
         set({ storyboardGenDisableTextInImage: enabled }),
+      setStoryboardGenAutoInferEmptyFrame: (enabled) =>
+        set({ storyboardGenAutoInferEmptyFrame: enabled }),
       setIgnoreAtTagWhenCopyingAndGenerating: (enabled) =>
         set({ ignoreAtTagWhenCopyingAndGenerating: enabled }),
+      setEnableStoryboardGenGridPreviewShortcut: (enabled) =>
+        set({ enableStoryboardGenGridPreviewShortcut: enabled }),
+      setShowStoryboardGenAdvancedRatioControls: (enabled) =>
+        set({ showStoryboardGenAdvancedRatioControls: enabled }),
       setUiRadiusPreset: (uiRadiusPreset) => set({ uiRadiusPreset }),
       setThemeTonePreset: (themeTonePreset) => set({ themeTonePreset }),
       setAccentColor: (color) => set({ accentColor: normalizeHexColor(color) }),
@@ -137,7 +152,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'settings-storage',
-      version: 7,
+      version: 9,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as {
           apiKey?: string;
@@ -148,6 +163,9 @@ export const useSettingsStore = create<SettingsState>()(
           canvasEdgeRoutingMode?: CanvasEdgeRoutingMode | string;
           autoCheckAppUpdateOnLaunch?: boolean;
           enableUpdateDialog?: boolean;
+          enableStoryboardGenGridPreviewShortcut?: boolean;
+          showStoryboardGenAdvancedRatioControls?: boolean;
+          storyboardGenAutoInferEmptyFrame?: boolean;
         };
 
         const migratedApiKeys = normalizeApiKeys(state.apiKeys);
@@ -165,6 +183,11 @@ export const useSettingsStore = create<SettingsState>()(
             canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
             autoCheckAppUpdateOnLaunch: state.autoCheckAppUpdateOnLaunch ?? true,
             enableUpdateDialog: state.enableUpdateDialog ?? true,
+            enableStoryboardGenGridPreviewShortcut:
+              state.enableStoryboardGenGridPreviewShortcut ?? false,
+            showStoryboardGenAdvancedRatioControls:
+              state.showStoryboardGenAdvancedRatioControls ?? false,
+            storyboardGenAutoInferEmptyFrame: state.storyboardGenAutoInferEmptyFrame ?? true,
           };
         }
 
@@ -179,6 +202,11 @@ export const useSettingsStore = create<SettingsState>()(
           canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
           autoCheckAppUpdateOnLaunch: state.autoCheckAppUpdateOnLaunch ?? true,
           enableUpdateDialog: state.enableUpdateDialog ?? true,
+          enableStoryboardGenGridPreviewShortcut:
+            state.enableStoryboardGenGridPreviewShortcut ?? false,
+          showStoryboardGenAdvancedRatioControls:
+            state.showStoryboardGenAdvancedRatioControls ?? false,
+          storyboardGenAutoInferEmptyFrame: state.storyboardGenAutoInferEmptyFrame ?? true,
         };
       },
     }

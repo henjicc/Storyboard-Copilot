@@ -1,4 +1,4 @@
-export type SettingsCategory = 'providers' | 'appearance' | 'general' | 'about';
+export type SettingsCategory = 'providers' | 'appearance' | 'general' | 'experimental' | 'about';
 
 interface OpenSettingsEventDetail {
   category?: SettingsCategory;
@@ -31,4 +31,3 @@ export function subscribeOpenSettingsDialog(
     window.removeEventListener(OPEN_SETTINGS_EVENT, handler as EventListener);
   };
 }
-

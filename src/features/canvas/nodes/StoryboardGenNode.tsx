@@ -1,5 +1,6 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   memo,
   useMemo,
@@ -10,6 +11,7 @@ import {
 } from 'react';
 import { Handle, Position, useUpdateNodeInternals, useViewport } from '@xyflow/react';
 import { Minus, Plus, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { embedStoryboardImageMetadata } from '@/commands/image';
 
 import {
@@ -19,6 +21,7 @@ import {
   EXPORT_RESULT_NODE_DEFAULT_WIDTH,
   EXPORT_RESULT_NODE_LAYOUT_HEIGHT,
   type ImageSize,
+  type StoryboardRatioControlMode,
   type StoryboardGenNodeData,
 } from '@/features/canvas/domain/canvasNodes';
 import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
@@ -119,6 +122,21 @@ const NODE_VERTICAL_PADDING_PX = 24;
 const FRAME_CELL_MIN_WIDTH_PX = 24;
 const FRAME_CELL_MIN_HEIGHT_PX = 16;
 const GRID_LINE_THICKNESS_PERCENT = 0.4;
+const RATIO_CONTROL_MODE_BUTTON_CLASS =
+  'flex h-5 items-center rounded-full border px-1.5 text-[9px] transition-colors';
+const FRIENDLY_ASPECT_RATIO_CANDIDATES = [
+  '1:1',
+  '16:9',
+  '9:16',
+  '4:3',
+  '3:4',
+  '21:9',
+  '9:21',
+  '3:2',
+  '2:3',
+  '5:4',
+  '4:5',
+];
 
 function getTextareaCaretOffset(
   textarea: HTMLTextAreaElement,
@@ -356,6 +374,83 @@ function pickClosestAspectRatio(
   return bestValue;
 }
 
+function ratioValueToAspectRatioString(ratioValue: number): string {
+  if (!Number.isFinite(ratioValue) || ratioValue <= 0) {
+    return DEFAULT_ASPECT_RATIO;
+  }
+
+  const scaledWidth = Math.max(1, Math.round(ratioValue * 1000));
+  const scaledHeight = 1000;
+  const gcd = (left: number, right: number): number => {
+    let a = Math.abs(left);
+    let b = Math.abs(right);
+    while (b !== 0) {
+      const temp = b;
+      b = a % b;
+      a = temp;
+    }
+    return a || 1;
+  };
+
+  const divisor = gcd(scaledWidth, scaledHeight);
+  return `${Math.round(scaledWidth / divisor)}:${Math.round(scaledHeight / divisor)}`;
+}
+
+function formatFriendlyAspectRatio(ratioValue: number): string {
+  if (!Number.isFinite(ratioValue) || ratioValue <= 0) {
+    return DEFAULT_ASPECT_RATIO;
+  }
+
+  const snapped = pickClosestAspectRatio(ratioValue, FRIENDLY_ASPECT_RATIO_CANDIDATES);
+  const snappedValue = parseAspectRatio(snapped);
+  const snapDistance = Math.abs(Math.log(snappedValue / ratioValue));
+  if (snapDistance <= Math.log(1.04)) {
+    return snapped;
+  }
+
+  if (ratioValue >= 1) {
+    return `${ratioValue.toFixed(2)}:1`;
+  }
+
+  return `1:${(1 / ratioValue).toFixed(2)}`;
+}
+
+function resolveStoryboardAspectRatios(
+  mode: StoryboardRatioControlMode,
+  controlRatioValue: number,
+  rows: number,
+  cols: number
+): {
+  cellRatioValue: number;
+  overallRatioValue: number;
+  cellAspectRatio: string;
+  overallAspectRatio: string;
+  cellAspectRatioLabel: string;
+  overallAspectRatioLabel: string;
+} {
+  const safeRows = Math.max(1, rows);
+  const safeCols = Math.max(1, cols);
+  const safeControl = Number.isFinite(controlRatioValue) && controlRatioValue > 0
+    ? controlRatioValue
+    : 1;
+
+  const cellRatioValue = mode === 'cell'
+    ? safeControl
+    : safeControl * (safeRows / safeCols);
+  const overallRatioValue = mode === 'overall'
+    ? safeControl
+    : safeControl * (safeCols / safeRows);
+
+  return {
+    cellRatioValue,
+    overallRatioValue,
+    cellAspectRatio: ratioValueToAspectRatioString(cellRatioValue),
+    overallAspectRatio: ratioValueToAspectRatioString(overallRatioValue),
+    cellAspectRatioLabel: formatFriendlyAspectRatio(cellRatioValue),
+    overallAspectRatioLabel: formatFriendlyAspectRatio(overallRatioValue),
+  };
+}
+
 function generateFrameId(): string {
   return `frame-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -450,6 +545,7 @@ function generateGridImageDataUrl(
 }
 
 export const StoryboardGenNode = memo(({ id, data, selected, width, height }: StoryboardGenNodeProps) => {
+  const { t } = useTranslation();
   const { zoom } = useViewport();
   const updateNodeInternals = useUpdateNodeInternals();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
@@ -467,8 +563,17 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const storyboardGenDisableTextInImage = useSettingsStore(
     (state) => state.storyboardGenDisableTextInImage
   );
+  const storyboardGenAutoInferEmptyFrame = useSettingsStore(
+    (state) => state.storyboardGenAutoInferEmptyFrame
+  );
   const ignoreAtTagWhenCopyingAndGenerating = useSettingsStore(
     (state) => state.ignoreAtTagWhenCopyingAndGenerating
+  );
+  const enableStoryboardGenGridPreviewShortcut = useSettingsStore(
+    (state) => state.enableStoryboardGenGridPreviewShortcut
+  );
+  const showStoryboardGenAdvancedRatioControls = useSettingsStore(
+    (state) => state.showStoryboardGenAdvancedRatioControls
   );
 
   const [error, setError] = useState<string | null>(null);
@@ -536,12 +641,25 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     return found ?? AUTO_ASPECT_RATIO_OPTION;
   }, [aspectRatioOptions, nodeData.requestAspectRatio]);
 
-  const frameAspectRatioValue = useMemo(() => {
+  const ratioControlMode: StoryboardRatioControlMode = showStoryboardGenAdvancedRatioControls
+    ? (nodeData.ratioControlMode === 'overall' ? 'overall' : 'cell')
+    : 'cell';
+  const controlAspectRatioValue = useMemo(() => {
     if (selectedAspectRatio.value === AUTO_REQUEST_ASPECT_RATIO) {
       return nodeData.aspectRatio || DEFAULT_ASPECT_RATIO;
     }
     return selectedAspectRatio.value || DEFAULT_ASPECT_RATIO;
   }, [nodeData.aspectRatio, selectedAspectRatio.value]);
+  const resolvedAspectRatios = useMemo(
+    () => resolveStoryboardAspectRatios(
+      ratioControlMode,
+      parseAspectRatio(controlAspectRatioValue),
+      nodeData.gridRows,
+      nodeData.gridCols
+    ),
+    [controlAspectRatioValue, nodeData.gridCols, nodeData.gridRows, ratioControlMode]
+  );
+  const frameAspectRatioValue = resolvedAspectRatios.cellAspectRatio;
 
   const baseFrameLayout = useMemo(() => {
     const aspectRatio = Math.max(0.1, parseAspectRatio(frameAspectRatioValue));
@@ -599,6 +717,14 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const supportedAspectRatioValues = useMemo(
     () => selectedModel.aspectRatios.map((item) => item.value),
     [selectedModel.aspectRatios]
+  );
+  const mappedOverallRequestAspectRatio = useMemo(
+    () =>
+      pickClosestAspectRatio(
+        resolvedAspectRatios.overallRatioValue,
+        supportedAspectRatioValues
+      ),
+    [resolvedAspectRatios.overallRatioValue, supportedAspectRatioValues]
   );
 
   const totalFrames = useMemo(
@@ -763,6 +889,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       const frameDescription = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
       const sanitizedDescription = sanitizeStoryboardPromptText(frameDescription);
       if (!sanitizedDescription) {
+        if (storyboardGenAutoInferEmptyFrame) {
+          parts.push(`分镜${index + 1}：依据之前的内容进行推测`);
+        }
         return;
       }
 
@@ -770,10 +899,88 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     });
 
     return parts.join('\n');
-  }, [nodeData, storyboardGenDisableTextInImage, storyboardGenKeepStyleConsistent]);
+  }, [
+    nodeData,
+    storyboardGenAutoInferEmptyFrame,
+    storyboardGenDisableTextInImage,
+    storyboardGenKeepStyleConsistent,
+  ]);
 
-  const handleGenerate = useCallback(async () => {
+  const resolveEffectiveRequestAspectRatio = useCallback(async (): Promise<string> => {
+    const safeRows = Math.max(1, nodeData.gridRows);
+    const safeCols = Math.max(1, nodeData.gridCols);
+    if (selectedAspectRatio.value !== AUTO_REQUEST_ASPECT_RATIO) {
+      return mappedOverallRequestAspectRatio;
+    }
+
+    let autoControlRatioValue = 1;
+    if (incomingImages.length > 0) {
+      try {
+        const sourceAspectRatio = await detectAspectRatio(incomingImages[0]);
+        autoControlRatioValue = Math.max(0.1, parseAspectRatio(sourceAspectRatio));
+      } catch {
+        autoControlRatioValue = 1;
+      }
+    }
+
+    const autoResolvedRatios = resolveStoryboardAspectRatios(
+      ratioControlMode,
+      autoControlRatioValue,
+      safeRows,
+      safeCols
+    );
+    return pickClosestAspectRatio(
+      autoResolvedRatios.overallRatioValue,
+      supportedAspectRatioValues
+    );
+  }, [
+    incomingImages,
+    mappedOverallRequestAspectRatio,
+    nodeData.gridCols,
+    nodeData.gridRows,
+    ratioControlMode,
+    selectedAspectRatio.value,
+    supportedAspectRatioValues,
+  ]);
+
+  const handleGenerate = useCallback(async (previewGridOnly = false) => {
     if (!nodeData) {
+      return;
+    }
+
+    const safeRows = Math.max(1, nodeData.gridRows);
+    const safeCols = Math.max(1, nodeData.gridCols);
+    const resolvedRequestAspectRatio = await resolveEffectiveRequestAspectRatio();
+
+    if (previewGridOnly) {
+      const gridImageDataUrl = generateGridImageDataUrl(
+        resolvedRequestAspectRatio,
+        safeRows,
+        safeCols,
+        selectedResolution.value
+      );
+      const newNodePosition = findNodePosition(
+        id,
+        EXPORT_RESULT_NODE_DEFAULT_WIDTH,
+        EXPORT_RESULT_NODE_LAYOUT_HEIGHT
+      );
+      const previewNodeId = addNode(
+        CANVAS_NODE_TYPES.exportImage,
+        newNodePosition,
+        {
+          displayName: t('node.storyboardGen.gridPreviewTitle'),
+          resultKind: 'storyboardGenOutput',
+          imageUrl: gridImageDataUrl,
+          previewImageUrl: gridImageDataUrl,
+          aspectRatio: resolvedRequestAspectRatio,
+          isGenerating: false,
+          generationStartedAt: null,
+          requestAspectRatio: resolvedRequestAspectRatio,
+        }
+      );
+      addEdge(id, previewNodeId);
+      setSelectedNode(null);
+      setError(null);
       return;
     }
 
@@ -814,7 +1021,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         prompt: '',
         model: selectedModel.id,
         size: selectedResolution.value as ImageSize,
-        requestAspectRatio: selectedAspectRatio.value,
+        requestAspectRatio: mappedOverallRequestAspectRatio,
       }
     );
 
@@ -827,29 +1034,11 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     try {
       await canvasAiGateway.setApiKey(selectedModel.providerId, providerApiKey);
 
-      let resolvedRequestAspectRatio = selectedAspectRatio.value;
-      if (resolvedRequestAspectRatio === AUTO_REQUEST_ASPECT_RATIO) {
-        if (incomingImages.length > 0) {
-          try {
-            const sourceAspectRatio = await detectAspectRatio(incomingImages[0]);
-            const sourceAspectRatioValue = parseAspectRatio(sourceAspectRatio);
-            resolvedRequestAspectRatio = pickClosestAspectRatio(
-              sourceAspectRatioValue,
-              supportedAspectRatioValues
-            );
-          } catch {
-            resolvedRequestAspectRatio = pickClosestAspectRatio(1, supportedAspectRatioValues);
-          }
-        } else {
-          resolvedRequestAspectRatio = pickClosestAspectRatio(1, supportedAspectRatioValues);
-        }
-      }
-
       // 生成网格图片作为最后一张参考图片
       const gridImageDataUrl = generateGridImageDataUrl(
-        frameAspectRatioValue,
-        nodeData.gridRows,
-        nodeData.gridCols,
+        resolvedRequestAspectRatio,
+        safeRows,
+        safeCols,
         selectedResolution.value
       );
 
@@ -872,14 +1061,14 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
       const prepared = await prepareNodeImage(resultUrl);
       const metadataFrameNotes = nodeData.frames
-        .slice(0, nodeData.gridRows * nodeData.gridCols)
+        .slice(0, safeRows * safeCols)
         .map((frame) => {
           const description = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
           return sanitizeStoryboardText(description, ignoreAtTagWhenCopyingAndGenerating);
         });
       const imageWithMetadata = await embedStoryboardImageMetadata(prepared.imageUrl, {
-        gridRows: nodeData.gridRows,
-        gridCols: nodeData.gridCols,
+        gridRows: safeRows,
+        gridCols: safeCols,
         frameNotes: metadataFrameNotes,
       }).catch((error) => {
         console.warn('[StoryboardMetadata] embed failed on generation output', error);
@@ -927,7 +1116,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     selectedModel.id,
     findNodePosition,
     updateNodeData,
-    frameAspectRatioValue,
+    mappedOverallRequestAspectRatio,
+    resolveEffectiveRequestAspectRatio,
+    t,
     ignoreAtTagWhenCopyingAndGenerating,
   ]);
 
@@ -1152,21 +1343,61 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <GridStepperControl
-            label="行"
+            label={t('node.storyboardGen.rowsShort')}
             value={nodeData.gridRows}
             onDecrease={() => handleRowChange(-1)}
             onIncrease={() => handleRowChange(1)}
           />
           <GridStepperControl
-            label="列"
+            label={t('node.storyboardGen.colsShort')}
             value={nodeData.gridCols}
             onDecrease={() => handleColChange(-1)}
             onIncrease={() => handleColChange(1)}
           />
         </div>
 
-        <div className={GRID_SUMMARY_CLASS}>
-          {totalFrames} 格
+        {showStoryboardGenAdvancedRatioControls && (
+          <div className="min-w-0 flex-1 rounded-full border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-center text-[10px] text-text-muted">
+            <span>{t('node.storyboardGen.cellAspectRatio')}: {resolvedAspectRatios.cellAspectRatioLabel}</span>
+            <span className="mx-1 text-[rgba(255,255,255,0.22)]">|</span>
+            <span>{t('node.storyboardGen.overallAspectRatio')}: {resolvedAspectRatios.overallAspectRatioLabel}</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1">
+          {showStoryboardGenAdvancedRatioControls && (
+            <div className="flex h-5 items-center rounded-full border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.04)] p-0.5">
+              <button
+                type="button"
+                className={`${RATIO_CONTROL_MODE_BUTTON_CLASS} ${ratioControlMode === 'overall'
+                  ? 'border-accent/55 bg-accent/18 text-text-dark'
+                  : 'border-transparent bg-transparent text-text-muted hover:bg-white/5'
+                  }`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  updateNodeData(id, { ratioControlMode: 'overall' });
+                }}
+              >
+                {t('node.storyboardGen.ratioModeOverall')}
+              </button>
+              <button
+                type="button"
+                className={`${RATIO_CONTROL_MODE_BUTTON_CLASS} ${ratioControlMode === 'cell'
+                  ? 'border-accent/55 bg-accent/18 text-text-dark'
+                  : 'border-transparent bg-transparent text-text-muted hover:bg-white/5'
+                  }`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  updateNodeData(id, { ratioControlMode: 'cell' });
+                }}
+              >
+                {t('node.storyboardGen.ratioModeCell')}
+              </button>
+            </div>
+          )}
+          <div className={GRID_SUMMARY_CLASS}>
+            {t('node.storyboardGen.frameCount', { count: totalFrames })}
+          </div>
         </div>
       </div>
 
@@ -1220,7 +1451,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
                   activeFrameTextareaRef.current = event.currentTarget;
                   syncFrameHighlightScroll(frame.id);
                 }}
-                placeholder={`分镜 ${String(index + 1).padStart(2, '0')} 描述`}
+                placeholder={t('node.storyboardGen.framePlaceholder', {
+                  index: String(index + 1).padStart(2, '0'),
+                })}
                 wrap="soft"
                 className="ui-scrollbar nodrag nowheel relative z-10 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-transparent caret-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words"
                 style={{ scrollbarGutter: 'stable' }}
@@ -1311,13 +1544,18 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         />
 
         <UiButton
-          onClick={(e) => { e.stopPropagation(); handleGenerate(); }}
+          onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            const previewGridOnly =
+              enableStoryboardGenGridPreviewShortcut && event.ctrlKey && event.altKey && event.shiftKey;
+            void handleGenerate(previewGridOnly);
+          }}
           variant="primary"
           size="sm"
           className={`!min-w-0 shrink-0 ${NODE_CONTROL_PRIMARY_BUTTON_CLASS}`}
         >
           <Sparkles className={NODE_CONTROL_ICON_CLASS} strokeWidth={2.8} />
-          生成
+          {t('canvas.generate')}
         </UiButton>
       </div>
 

@@ -23,6 +23,13 @@ interface SettingsDialogProps {
   onCheckUpdate?: () => Promise<'has-update' | 'up-to-date' | 'failed'>;
 }
 
+interface SettingsCheckboxCardProps {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
 const PROVIDER_REGISTER_URLS: Record<string, string> = {
   ppio: 'https://ppio.com/user/register?invited_by=WGY0DZ',
   grsai: 'https://grsai.com',
@@ -36,6 +43,41 @@ const PROVIDER_GET_KEY_URLS: Record<string, string> = {
   kie: 'https://kie.ai/api-key',
   fal: 'https://fal.ai/dashboard/keys',
 };
+
+function SettingsCheckboxCard({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: SettingsCheckboxCardProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onCheckedChange(!checked)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onCheckedChange(!checked);
+        }
+      }}
+      className="w-full rounded-lg border border-border-dark bg-bg-dark p-4 text-left transition-colors hover:border-[rgba(255,255,255,0.2)]"
+    >
+      <div className="flex items-start gap-3">
+        <UiCheckbox
+          checked={checked}
+          onCheckedChange={(nextChecked) => onCheckedChange(nextChecked)}
+          onClick={(event) => event.stopPropagation()}
+          className="mt-0.5 shrink-0"
+        />
+        <div>
+          <h3 className="text-sm font-medium text-text-dark">{title}</h3>
+          <p className="mt-1 text-xs text-text-muted">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsDialog({
   isOpen,
@@ -52,7 +94,10 @@ export function SettingsDialog({
     useUploadFilenameAsNodeTitle,
     storyboardGenKeepStyleConsistent,
     storyboardGenDisableTextInImage,
+    storyboardGenAutoInferEmptyFrame,
     ignoreAtTagWhenCopyingAndGenerating,
+    enableStoryboardGenGridPreviewShortcut,
+    showStoryboardGenAdvancedRatioControls,
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
@@ -65,7 +110,10 @@ export function SettingsDialog({
     setUseUploadFilenameAsNodeTitle,
     setStoryboardGenKeepStyleConsistent,
     setStoryboardGenDisableTextInImage,
+    setStoryboardGenAutoInferEmptyFrame,
     setIgnoreAtTagWhenCopyingAndGenerating,
+    setEnableStoryboardGenGridPreviewShortcut,
+    setShowStoryboardGenAdvancedRatioControls,
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
@@ -98,8 +146,15 @@ export function SettingsDialog({
   const [localStoryboardGenDisableTextInImage, setLocalStoryboardGenDisableTextInImage] = useState(
     storyboardGenDisableTextInImage
   );
+  const [localStoryboardGenAutoInferEmptyFrame, setLocalStoryboardGenAutoInferEmptyFrame] = useState(
+    storyboardGenAutoInferEmptyFrame
+  );
   const [localIgnoreAtTagWhenCopyingAndGenerating, setLocalIgnoreAtTagWhenCopyingAndGenerating] =
     useState(ignoreAtTagWhenCopyingAndGenerating);
+  const [localEnableStoryboardGenGridPreviewShortcut, setLocalEnableStoryboardGenGridPreviewShortcut] =
+    useState(enableStoryboardGenGridPreviewShortcut);
+  const [localShowStoryboardGenAdvancedRatioControls, setLocalShowStoryboardGenAdvancedRatioControls] =
+    useState(showStoryboardGenAdvancedRatioControls);
   const [localUiRadiusPreset, setLocalUiRadiusPreset] = useState(uiRadiusPreset);
   const [localThemeTonePreset, setLocalThemeTonePreset] = useState(themeTonePreset);
   const [localAccentColor, setLocalAccentColor] = useState(accentColor);
@@ -143,7 +198,10 @@ export function SettingsDialog({
     setLocalUseUploadFilenameAsNodeTitle(useUploadFilenameAsNodeTitle);
     setLocalStoryboardGenKeepStyleConsistent(storyboardGenKeepStyleConsistent);
     setLocalStoryboardGenDisableTextInImage(storyboardGenDisableTextInImage);
+    setLocalStoryboardGenAutoInferEmptyFrame(storyboardGenAutoInferEmptyFrame);
     setLocalIgnoreAtTagWhenCopyingAndGenerating(ignoreAtTagWhenCopyingAndGenerating);
+    setLocalEnableStoryboardGenGridPreviewShortcut(enableStoryboardGenGridPreviewShortcut);
+    setLocalShowStoryboardGenAdvancedRatioControls(showStoryboardGenAdvancedRatioControls);
     setLocalUiRadiusPreset(uiRadiusPreset);
     setLocalThemeTonePreset(themeTonePreset);
     setLocalAccentColor(accentColor);
@@ -161,7 +219,10 @@ export function SettingsDialog({
     useUploadFilenameAsNodeTitle,
     storyboardGenKeepStyleConsistent,
     storyboardGenDisableTextInImage,
+    storyboardGenAutoInferEmptyFrame,
     ignoreAtTagWhenCopyingAndGenerating,
+    enableStoryboardGenGridPreviewShortcut,
+    showStoryboardGenAdvancedRatioControls,
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
@@ -180,7 +241,10 @@ export function SettingsDialog({
     setUseUploadFilenameAsNodeTitle(localUseUploadFilenameAsNodeTitle);
     setStoryboardGenKeepStyleConsistent(localStoryboardGenKeepStyleConsistent);
     setStoryboardGenDisableTextInImage(localStoryboardGenDisableTextInImage);
+    setStoryboardGenAutoInferEmptyFrame(localStoryboardGenAutoInferEmptyFrame);
     setIgnoreAtTagWhenCopyingAndGenerating(localIgnoreAtTagWhenCopyingAndGenerating);
+    setEnableStoryboardGenGridPreviewShortcut(localEnableStoryboardGenGridPreviewShortcut);
+    setShowStoryboardGenAdvancedRatioControls(localShowStoryboardGenAdvancedRatioControls);
     setUiRadiusPreset(localUiRadiusPreset);
     setThemeTonePreset(localThemeTonePreset);
     setAccentColor(localAccentColor);
@@ -195,7 +259,10 @@ export function SettingsDialog({
     localUseUploadFilenameAsNodeTitle,
     localStoryboardGenKeepStyleConsistent,
     localStoryboardGenDisableTextInImage,
+    localStoryboardGenAutoInferEmptyFrame,
     localIgnoreAtTagWhenCopyingAndGenerating,
+    localEnableStoryboardGenGridPreviewShortcut,
+    localShowStoryboardGenAdvancedRatioControls,
     localUiRadiusPreset,
     localThemeTonePreset,
     localAccentColor,
@@ -209,7 +276,10 @@ export function SettingsDialog({
     setUseUploadFilenameAsNodeTitle,
     setStoryboardGenKeepStyleConsistent,
     setStoryboardGenDisableTextInImage,
+    setStoryboardGenAutoInferEmptyFrame,
     setIgnoreAtTagWhenCopyingAndGenerating,
+    setEnableStoryboardGenGridPreviewShortcut,
+    setShowStoryboardGenAdvancedRatioControls,
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
@@ -343,6 +413,20 @@ export function SettingsDialog({
               `}
               >
                 <span className="text-sm">{t('settings.appearance')}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveCategory('experimental')}
+                className={`
+                w-full flex items-center gap-3 px-4 py-2.5 text-left
+                transition-colors
+                ${activeCategory === 'experimental'
+                    ? 'bg-accent/10 text-text-dark border-l-2 border-accent'
+                    : 'text-text-muted hover:bg-bg-dark hover:text-text-dark'
+                  }
+              `}
+              >
+                <span className="text-sm">{t('settings.experimental')}</span>
               </button>
 
               <button
@@ -626,79 +710,33 @@ export function SettingsDialog({
                 </div>
 
                 <div className="ui-scrollbar flex-1 space-y-4 overflow-y-auto p-6">
-                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localStoryboardGenKeepStyleConsistent}
-                        onCheckedChange={(checked) => setLocalStoryboardGenKeepStyleConsistent(checked)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.storyboardGenKeepStyleConsistent')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.storyboardGenKeepStyleConsistentDesc')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <SettingsCheckboxCard
+                    checked={localStoryboardGenKeepStyleConsistent}
+                    onCheckedChange={setLocalStoryboardGenKeepStyleConsistent}
+                    title={t('settings.storyboardGenKeepStyleConsistent')}
+                    description={t('settings.storyboardGenKeepStyleConsistentDesc')}
+                  />
 
-                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localIgnoreAtTagWhenCopyingAndGenerating}
-                        onCheckedChange={(checked) =>
-                          setLocalIgnoreAtTagWhenCopyingAndGenerating(checked)
-                        }
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.ignoreAtTagWhenCopyingAndGenerating')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.ignoreAtTagWhenCopyingAndGeneratingDesc')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <SettingsCheckboxCard
+                    checked={localIgnoreAtTagWhenCopyingAndGenerating}
+                    onCheckedChange={setLocalIgnoreAtTagWhenCopyingAndGenerating}
+                    title={t('settings.ignoreAtTagWhenCopyingAndGenerating')}
+                    description={t('settings.ignoreAtTagWhenCopyingAndGeneratingDesc')}
+                  />
 
-                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localStoryboardGenDisableTextInImage}
-                        onCheckedChange={(checked) => setLocalStoryboardGenDisableTextInImage(checked)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.storyboardGenDisableTextInImage')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.storyboardGenDisableTextInImageDesc')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <SettingsCheckboxCard
+                    checked={localStoryboardGenDisableTextInImage}
+                    onCheckedChange={setLocalStoryboardGenDisableTextInImage}
+                    title={t('settings.storyboardGenDisableTextInImage')}
+                    description={t('settings.storyboardGenDisableTextInImageDesc')}
+                  />
 
-                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localUseUploadFilenameAsNodeTitle}
-                        onCheckedChange={(checked) => setLocalUseUploadFilenameAsNodeTitle(checked)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.useUploadFilenameAsNodeTitle')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.useUploadFilenameAsNodeTitleDesc')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <SettingsCheckboxCard
+                    checked={localUseUploadFilenameAsNodeTitle}
+                    onCheckedChange={setLocalUseUploadFilenameAsNodeTitle}
+                    title={t('settings.useUploadFilenameAsNodeTitle')}
+                    description={t('settings.useUploadFilenameAsNodeTitleDesc')}
+                  />
 
                   <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
                     <div className="mb-3">
@@ -760,6 +798,51 @@ export function SettingsDialog({
                       )}
                     </div>
                   </div>
+                </div>
+
+                <div className="flex justify-end border-t border-border-dark px-6 py-4">
+                  <button
+                    onClick={handleSave}
+                    className="rounded bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/80"
+                  >
+                    {t('common.save')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeCategory === 'experimental' && (
+              <>
+                <div className="px-6 py-5 border-b border-border-dark">
+                  <h2 className="text-lg font-semibold text-text-dark">
+                    {t('settings.experimental')}
+                  </h2>
+                  <p className="text-sm text-text-muted mt-1">
+                    {t('settings.experimentalDesc')}
+                  </p>
+                </div>
+
+                <div className="ui-scrollbar flex-1 space-y-4 overflow-y-auto p-6">
+                  <SettingsCheckboxCard
+                    checked={localEnableStoryboardGenGridPreviewShortcut}
+                    onCheckedChange={setLocalEnableStoryboardGenGridPreviewShortcut}
+                    title={t('settings.enableStoryboardGenGridPreviewShortcut')}
+                    description={t('settings.enableStoryboardGenGridPreviewShortcutDesc')}
+                  />
+
+                  <SettingsCheckboxCard
+                    checked={localShowStoryboardGenAdvancedRatioControls}
+                    onCheckedChange={setLocalShowStoryboardGenAdvancedRatioControls}
+                    title={t('settings.showStoryboardGenAdvancedRatioControls')}
+                    description={t('settings.showStoryboardGenAdvancedRatioControlsDesc')}
+                  />
+
+                  <SettingsCheckboxCard
+                    checked={localStoryboardGenAutoInferEmptyFrame}
+                    onCheckedChange={setLocalStoryboardGenAutoInferEmptyFrame}
+                    title={t('settings.storyboardGenAutoInferEmptyFrame')}
+                    description={t('settings.storyboardGenAutoInferEmptyFrameDesc')}
+                  />
                 </div>
 
                 <div className="flex justify-end border-t border-border-dark px-6 py-4">
@@ -836,37 +919,19 @@ export function SettingsDialog({
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localAutoCheckAppUpdateOnLaunch}
-                        onCheckedChange={(checked) => setLocalAutoCheckAppUpdateOnLaunch(checked)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.autoCheckUpdateOnLaunch')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.autoCheckUpdateOnLaunchDesc')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <UiCheckbox
-                        checked={localEnableUpdateDialog}
-                        onCheckedChange={(checked) => setLocalEnableUpdateDialog(checked)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <h3 className="text-sm font-medium text-text-dark">
-                          {t('settings.enableUpdateDialog')}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t('settings.enableUpdateDialogDesc')}
-                        </p>
-                      </div>
-                    </div>
+                  <div className="space-y-3">
+                    <SettingsCheckboxCard
+                      checked={localAutoCheckAppUpdateOnLaunch}
+                      onCheckedChange={setLocalAutoCheckAppUpdateOnLaunch}
+                      title={t('settings.autoCheckUpdateOnLaunch')}
+                      description={t('settings.autoCheckUpdateOnLaunchDesc')}
+                    />
+                    <SettingsCheckboxCard
+                      checked={localEnableUpdateDialog}
+                      onCheckedChange={setLocalEnableUpdateDialog}
+                      title={t('settings.enableUpdateDialog')}
+                      description={t('settings.enableUpdateDialogDesc')}
+                    />
                     <div className="pt-1">
                       <button
                         type="button"

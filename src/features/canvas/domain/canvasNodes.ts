@@ -119,11 +119,14 @@ export interface StoryboardGenFrameItem {
   referenceIndex: number | null;
 }
 
+export type StoryboardRatioControlMode = 'overall' | 'cell';
+
 export interface StoryboardGenNodeData {
   displayName?: string;
   gridRows: number;
   gridCols: number;
   frames: StoryboardGenFrameItem[];
+  ratioControlMode?: StoryboardRatioControlMode;
   model: string;
   size: ImageSize;
   requestAspectRatio: string;

@@ -115,6 +115,18 @@
       "cols": "列数",
       "frameIndex": "第 {{index}} 格"
     },
+    "storyboardGen": {
+      "rowsShort": "行",
+      "colsShort": "列",
+      "frameCount": "{{count}} 格",
+      "ratioModeOverall": "整体比",
+      "ratioModeCell": "单格比",
+      "cellAspectRatio": "单格比例",
+      "overallAspectRatio": "整体比例",
+      "requestAspectRatio": "请求比例",
+      "framePlaceholder": "分镜 {{index}} 描述",
+      "gridPreviewTitle": "网格预览"
+    },
     "textAnnotation": {
       "placeholder": "输入 Markdown 文本，取消选中后会渲染预览",
       "empty": "空注释"
@@ -175,6 +187,8 @@
     "doNotShowAgain": "不再显示",
     "appearance": "外观",
     "appearanceDesc": "自定义应用外观",
+    "experimental": "实验",
+    "experimentalDesc": "用于放置实验性质或低频使用的功能开关。",
     "about": "关于",
     "aboutDesc": "应用信息",
     "general": "通用",
@@ -234,6 +248,12 @@
     "autoCheckUpdateOnLaunchDesc": "每次打开软件自动检查一次新版本。",
     "enableUpdateDialog": "启用更新提示弹窗",
     "enableUpdateDialogDesc": "检测到新版本时显示更新提示弹窗。",
+    "enableStoryboardGenGridPreviewShortcut": "启用分镜网格预览快捷键",
+    "enableStoryboardGenGridPreviewShortcutDesc": "启用后，在分镜生成节点按住 Ctrl + Alt + Shift 点击“生成”会直接输出网格预览图，不发送 AI 请求。",
+    "showStoryboardGenAdvancedRatioControls": "显示分镜比例高级控制",
+    "showStoryboardGenAdvancedRatioControlsDesc": "启用后显示单格/整体比例信息和“整体比/单格比”切换；关闭时默认按单格比逻辑运行。",
+    "storyboardGenAutoInferEmptyFrame": "空分镜自动推测",
+    "storyboardGenAutoInferEmptyFrameDesc": "启用后，分镜生成时如果某个格子没有填写内容，会自动追加“依据之前的内容进行推测”。",
     "checkUpdateNow": "立即检查更新",
     "checkingUpdate": "正在检查更新...",
     "checkUpdateHasUpdate": "检测到新版本。",

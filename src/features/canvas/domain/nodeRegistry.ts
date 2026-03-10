@@ -237,6 +237,7 @@ const storyboardGenNodeDefinition: CanvasNodeDefinition<StoryboardGenNodeData> =
     gridRows: 2,
     gridCols: 2,
     frames: [],
+    ratioControlMode: 'cell',
     model: DEFAULT_IMAGE_MODEL_ID,
     size: '2K' as ImageSize,
     requestAspectRatio: AUTO_REQUEST_ASPECT_RATIO,

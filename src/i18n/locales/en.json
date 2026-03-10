@@ -115,6 +115,18 @@
       "cols": "Columns",
       "frameIndex": "Frame {{index}}"
     },
+    "storyboardGen": {
+      "rowsShort": "R",
+      "colsShort": "C",
+      "frameCount": "{{count}} frames",
+      "ratioModeOverall": "Overall",
+      "ratioModeCell": "Cell",
+      "cellAspectRatio": "Cell ratio",
+      "overallAspectRatio": "Overall ratio",
+      "requestAspectRatio": "Request ratio",
+      "framePlaceholder": "Frame {{index}} description",
+      "gridPreviewTitle": "Grid Preview"
+    },
     "textAnnotation": {
       "placeholder": "Write Markdown text. It will render when unselected.",
       "empty": "Empty note"
@@ -175,6 +187,8 @@
     "doNotShowAgain": "Do not show again",
     "appearance": "Appearance",
     "appearanceDesc": "Customize app appearance",
+    "experimental": "Experimental",
+    "experimentalDesc": "Low-priority or experimental feature toggles.",
     "about": "About",
     "aboutDesc": "Application information",
     "general": "General",
@@ -234,6 +248,12 @@
     "autoCheckUpdateOnLaunchDesc": "Check for updates once every time the app starts.",
     "enableUpdateDialog": "Enable update dialog",
     "enableUpdateDialogDesc": "Show a custom dialog when a new version is detected.",
+    "enableStoryboardGenGridPreviewShortcut": "Enable storyboard grid preview shortcut",
+    "enableStoryboardGenGridPreviewShortcutDesc": "When enabled, holding Ctrl + Alt + Shift and clicking Generate on storyboard generation creates a grid preview node without sending AI request.",
+    "showStoryboardGenAdvancedRatioControls": "Show advanced storyboard ratio controls",
+    "showStoryboardGenAdvancedRatioControlsDesc": "When enabled, show cell/overall ratio info and the Overall/Cell mode switch. When disabled, storyboard generation uses cell-ratio mode by default.",
+    "storyboardGenAutoInferEmptyFrame": "Auto infer empty frames",
+    "storyboardGenAutoInferEmptyFrameDesc": "When enabled, empty storyboard cells automatically append \"依据之前的内容进行推测\" during generation prompt construction.",
     "checkUpdateNow": "Check for updates now",
     "checkingUpdate": "Checking for updates...",
     "checkUpdateHasUpdate": "New version detected.",
