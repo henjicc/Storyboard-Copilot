@@ -65,7 +65,12 @@ export function resolveErrorContent(error: unknown, fallbackMessage: string): Re
   return { message: fallbackMessage };
 }
 
-export async function showErrorDialog(text: string, title: string, details?: string): Promise<void> {
+export async function showErrorDialog(
+  text: string,
+  title: string,
+  details?: string,
+  copyText?: string
+): Promise<void> {
   const content = text.trim();
   if (!content) {
     return;
@@ -75,5 +80,6 @@ export async function showErrorDialog(text: string, title: string, details?: str
     title,
     message: content,
     details: details?.trim() || undefined,
+    copyText: copyText?.trim() || undefined,
   });
 }

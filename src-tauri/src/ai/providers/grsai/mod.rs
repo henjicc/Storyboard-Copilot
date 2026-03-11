@@ -9,7 +9,9 @@ use tracing::info;
 use base64::{engine::general_purpose::STANDARD, Engine};
 
 use crate::ai::error::AIError;
-use crate::ai::{AIProvider, GenerateRequest};
+use crate::ai::{
+    AIProvider, GenerateRequest, ProviderTaskHandle, ProviderTaskPollResult, ProviderTaskSubmission,
+};
 
 const DRAW_ENDPOINT_PATH: &str = "/v1/draw/nano-banana";
 const RESULT_ENDPOINT_PATH: &str = "/v1/draw/result";
@@ -225,7 +227,7 @@ impl GrsaiProvider {
         response.json::<Value>().await.map_err(AIError::from)
     }
 
-    async fn poll_result(&self, task_id: &str) -> Result<String, AIError> {
+    async fn poll_result_once(&self, task_id: &str) -> Result<ProviderTaskPollResult, AIError> {
         let endpoint = format!("{}{}", self.base_url, RESULT_ENDPOINT_PATH);
         let api_key = self
             .api_key
@@ -234,48 +236,52 @@ impl GrsaiProvider {
             .clone()
             .ok_or_else(|| AIError::InvalidRequest("API key not set".to_string()))?;
 
+        let response = self
+            .client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&json!({ "id": task_id }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(AIError::Provider(format!(
+                "GRSAI result request failed {}: {}",
+                status, error_text
+            )));
+        }
+
+        let poll_response = response.json::<Value>().await?;
+        let payload = Self::resolve_task_payload(&poll_response)?;
+
+        if let Some(url) = Self::extract_result_url(payload) {
+            return Ok(ProviderTaskPollResult::Succeeded(url));
+        }
+
+        match payload.get("status").and_then(|raw| raw.as_str()) {
+            Some("running") | None => Ok(ProviderTaskPollResult::Running),
+            Some("failed") => {
+                let reason = payload
+                    .get("error")
+                    .and_then(|raw| raw.as_str())
+                    .filter(|value| !value.is_empty())
+                    .or_else(|| payload.get("failure_reason").and_then(|raw| raw.as_str()))
+                    .unwrap_or("unknown failure");
+                Ok(ProviderTaskPollResult::Failed(reason.to_string()))
+            }
+            Some(other) => Err(AIError::Provider(format!("GRSAI unexpected task status: {}", other))),
+        }
+    }
+
+    async fn poll_result_until_complete(&self, task_id: &str) -> Result<String, AIError> {
         loop {
-            let response = self
-                .client
-                .post(&endpoint)
-                .header("Authorization", format!("Bearer {}", api_key))
-                .header("Content-Type", "application/json")
-                .json(&json!({ "id": task_id }))
-                .send()
-                .await?;
-
-            if !response.status().is_success() {
-                let status = response.status();
-                let error_text = response.text().await.unwrap_or_default();
-                return Err(AIError::Provider(format!(
-                    "GRSAI result request failed {}: {}",
-                    status, error_text
-                )));
-            }
-
-            let poll_response = response.json::<Value>().await?;
-            let payload = Self::resolve_task_payload(&poll_response)?;
-
-            if let Some(url) = Self::extract_result_url(payload) {
-                return Ok(url);
-            }
-
-            match payload.get("status").and_then(|raw| raw.as_str()) {
-                Some("running") | None => {
-                    sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
-                }
-                Some("failed") => {
-                    let reason = payload
-                        .get("error")
-                        .and_then(|raw| raw.as_str())
-                        .filter(|value| !value.is_empty())
-                        .or_else(|| payload.get("failure_reason").and_then(|raw| raw.as_str()))
-                        .unwrap_or("unknown failure");
-                    return Err(AIError::TaskFailed(reason.to_string()));
-                }
-                Some(other) => {
-                    return Err(AIError::Provider(format!("GRSAI unexpected task status: {}", other)));
-                }
+            match self.poll_result_once(task_id).await? {
+                ProviderTaskPollResult::Running => sleep(Duration::from_millis(POLL_INTERVAL_MS)).await,
+                ProviderTaskPollResult::Succeeded(url) => return Ok(url),
+                ProviderTaskPollResult::Failed(message) => return Err(AIError::TaskFailed(message)),
             }
         }
     }
@@ -313,6 +319,33 @@ impl AIProvider for GrsaiProvider {
         Ok(())
     }
 
+    fn supports_task_resume(&self) -> bool {
+        true
+    }
+
+    async fn submit_task(&self, request: GenerateRequest) -> Result<ProviderTaskSubmission, AIError> {
+        let model = self.normalize_requested_model(&request);
+        let draw_response = self.request_draw(&request, model).await?;
+        let payload = Self::resolve_task_payload(&draw_response)?;
+
+        if let Some(url) = Self::extract_result_url(payload) {
+            return Ok(ProviderTaskSubmission::Succeeded(url));
+        }
+
+        let task_id = payload
+            .get("id")
+            .and_then(|raw| raw.as_str())
+            .ok_or_else(|| AIError::Provider("GRSAI response missing task id".to_string()))?;
+        Ok(ProviderTaskSubmission::Queued(ProviderTaskHandle {
+            task_id: task_id.to_string(),
+            metadata: None,
+        }))
+    }
+
+    async fn poll_task(&self, handle: ProviderTaskHandle) -> Result<ProviderTaskPollResult, AIError> {
+        self.poll_result_once(handle.task_id.as_str()).await
+    }
+
     async fn generate(&self, request: GenerateRequest) -> Result<String, AIError> {
         let model = self.normalize_requested_model(&request);
         info!(
@@ -332,6 +365,6 @@ impl AIProvider for GrsaiProvider {
             .and_then(|raw| raw.as_str())
             .ok_or_else(|| AIError::Provider("GRSAI response missing task id".to_string()))?;
 
-        self.poll_result(task_id).await
+        self.poll_result_until_complete(task_id).await
     }
 }

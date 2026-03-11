@@ -17,6 +17,25 @@ pub struct GenerateRequest {
     pub extra_params: Option<HashMap<String, serde_json::Value>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProviderTaskHandle {
+    pub task_id: String,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProviderTaskSubmission {
+    Queued(ProviderTaskHandle),
+    Succeeded(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProviderTaskPollResult {
+    Running,
+    Succeeded(String),
+    Failed(String),
+}
+
 #[async_trait::async_trait]
 pub trait AIProvider: Send + Sync {
     fn name(&self) -> &str;
@@ -29,6 +48,24 @@ pub trait AIProvider: Send + Sync {
     async fn set_api_key(&self, _api_key: String) -> Result<(), AIError> {
         Err(AIError::Provider(format!(
             "Provider '{}' does not support API key configuration",
+            self.name()
+        )))
+    }
+
+    fn supports_task_resume(&self) -> bool {
+        false
+    }
+
+    async fn submit_task(&self, _request: GenerateRequest) -> Result<ProviderTaskSubmission, AIError> {
+        Err(AIError::Provider(format!(
+            "Provider '{}' does not support resumable task submission",
+            self.name()
+        )))
+    }
+
+    async fn poll_task(&self, _handle: ProviderTaskHandle) -> Result<ProviderTaskPollResult, AIError> {
+        Err(AIError::Provider(format!(
+            "Provider '{}' does not support resumable task polling",
             self.name()
         )))
     }

@@ -7,6 +7,7 @@ use std::time::Duration;
 use commands::ai as ai_commands;
 use commands::image;
 use commands::project_state;
+use commands::system;
 use commands::update;
 use tauri::Manager;
 use tracing::{info, warn};
@@ -176,6 +177,8 @@ pub fn run() {
             image::save_image_source_to_app_debug_dir,
             image::copy_image_source_to_clipboard,
             ai_commands::set_api_key,
+            ai_commands::submit_generate_image_job,
+            ai_commands::get_generate_image_job,
             ai_commands::generate_image,
             ai_commands::list_models,
             project_state::list_project_summaries,
@@ -184,6 +187,7 @@ pub fn run() {
             project_state::update_project_viewport_record,
             project_state::rename_project_record,
             project_state::delete_project_record,
+            system::get_runtime_system_info,
             update::check_latest_release_tag,
         ])
         .run(tauri::generate_context!())

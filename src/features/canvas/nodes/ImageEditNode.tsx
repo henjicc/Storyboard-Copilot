@@ -31,9 +31,15 @@ import { resolveErrorContent, showErrorDialog } from '@/features/canvas/applicat
 import {
   detectAspectRatio,
   parseAspectRatio,
-  prepareNodeImage,
   resolveImageDisplayUrl,
 } from '@/features/canvas/application/imageData';
+import {
+  buildGenerationErrorReport,
+  CURRENT_RUNTIME_SESSION_ID,
+  createReferenceImagePlaceholders,
+  getRuntimeDiagnostics,
+  type GenerationDebugContext,
+} from '@/features/canvas/application/generationErrorReport';
 import {
   findReferenceTokens,
   insertReferenceToken,
@@ -396,6 +402,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
     const generationDurationMs = selectedModel.expectedDurationMs ?? 60000;
     const generationStartedAt = Date.now();
     const resultNodeTitle = buildAiResultNodeTitle(prompt, t('node.imageEdit.resultTitle'));
+    const runtimeDiagnostics = await getRuntimeDiagnostics();
     setError(null);
 
     const newNodePosition = findNodePosition(
@@ -437,7 +444,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         }
       }
 
-      const resultUrl = await canvasAiGateway.generateImage({
+      const jobId = await canvasAiGateway.submitGenerateImageJob({
         prompt,
         model: requestResolution.requestModel,
         size: selectedResolution.value,
@@ -450,22 +457,78 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
             : {}),
         },
       });
-
-      const prepared = await prepareNodeImage(resultUrl);
+      const generationDebugContext: GenerationDebugContext = {
+        sourceType: 'imageEdit',
+        providerId: selectedModel.providerId,
+        requestModel: requestResolution.requestModel,
+        requestSize: selectedResolution.value,
+        requestAspectRatio: resolvedRequestAspectRatio,
+        prompt,
+        extraParams: {
+          ...(data.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
+        referenceImageCount: incomingImages.length,
+        referenceImagePlaceholders: createReferenceImagePlaceholders(incomingImages.length),
+        appVersion: runtimeDiagnostics.appVersion,
+        osName: runtimeDiagnostics.osName,
+        osVersion: runtimeDiagnostics.osVersion,
+        osBuild: runtimeDiagnostics.osBuild,
+        userAgent: runtimeDiagnostics.userAgent,
+      };
       updateNodeData(newNodeId, {
-        imageUrl: prepared.imageUrl,
-        previewImageUrl: prepared.previewImageUrl,
-        aspectRatio: prepared.aspectRatio,
-        isGenerating: false,
-        generationStartedAt: null,
+        generationJobId: jobId,
+        generationSourceType: 'imageEdit',
+        generationProviderId: selectedModel.providerId,
+        generationClientSessionId: CURRENT_RUNTIME_SESSION_ID,
+        generationDebugContext,
       });
     } catch (generationError) {
       const resolvedError = resolveErrorContent(generationError, t('ai.error'));
+      const generationDebugContext: GenerationDebugContext = {
+        sourceType: 'imageEdit',
+        providerId: selectedModel.providerId,
+        requestModel: requestResolution.requestModel,
+        requestSize: selectedResolution.value,
+        requestAspectRatio: selectedAspectRatio.value,
+        prompt,
+        extraParams: {
+          ...(data.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
+        referenceImageCount: incomingImages.length,
+        referenceImagePlaceholders: createReferenceImagePlaceholders(incomingImages.length),
+        appVersion: runtimeDiagnostics.appVersion,
+        osName: runtimeDiagnostics.osName,
+        osVersion: runtimeDiagnostics.osVersion,
+        osBuild: runtimeDiagnostics.osBuild,
+        userAgent: runtimeDiagnostics.userAgent,
+      };
+      const reportText = buildGenerationErrorReport({
+        errorMessage: resolvedError.message,
+        errorDetails: resolvedError.details,
+        context: generationDebugContext,
+      });
       setError(resolvedError.message);
-      void showErrorDialog(resolvedError.message, t('common.error'), resolvedError.details);
+      void showErrorDialog(
+        resolvedError.message,
+        t('common.error'),
+        resolvedError.details,
+        reportText
+      );
       updateNodeData(newNodeId, {
         isGenerating: false,
         generationStartedAt: null,
+        generationJobId: null,
+        generationProviderId: null,
+        generationClientSessionId: null,
+        generationError: resolvedError.message,
+        generationErrorDetails: resolvedError.details ?? null,
+        generationDebugContext,
       });
     }
   }, [

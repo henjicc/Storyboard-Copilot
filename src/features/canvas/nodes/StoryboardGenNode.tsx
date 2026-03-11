@@ -12,7 +12,6 @@ import {
 import { Handle, Position, useUpdateNodeInternals, useViewport } from '@xyflow/react';
 import { Minus, Plus, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { embedStoryboardImageMetadata } from '@/commands/image';
 
 import {
   AUTO_REQUEST_ASPECT_RATIO,
@@ -34,10 +33,16 @@ import {
 import { resolveErrorContent, showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   detectAspectRatio,
-  prepareNodeImage,
   parseAspectRatio,
   resolveImageDisplayUrl,
 } from '@/features/canvas/application/imageData';
+import {
+  buildGenerationErrorReport,
+  CURRENT_RUNTIME_SESSION_ID,
+  createReferenceImagePlaceholders,
+  getRuntimeDiagnostics,
+  type GenerationDebugContext,
+} from '@/features/canvas/application/generationErrorReport';
 import {
   sanitizeStoryboardPromptText,
   sanitizeStoryboardText,
@@ -986,6 +991,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
     const generationDurationMs = selectedModel.expectedDurationMs ?? 60000;
     const generationStartedAt = Date.now();
+    const runtimeDiagnostics = await getRuntimeDiagnostics();
 
     // Create new image node with generating state immediately
     // Use auto-positioning to avoid collisions with existing nodes
@@ -1030,7 +1036,14 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       // 将网格图片作为最后一张参考图片
       const allReferenceImages = [...incomingImages, gridImageDataUrl];
 
-      const resultUrl = await canvasAiGateway.generateImage({
+      const metadataFrameNotes = nodeData.frames
+        .slice(0, safeRows * safeCols)
+        .map((frame) => {
+          const description = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
+          return sanitizeStoryboardText(description, ignoreAtTagWhenCopyingAndGenerating);
+        });
+
+      const jobId = await canvasAiGateway.submitGenerateImageJob({
         prompt,
         model: requestResolution.requestModel,
         size: selectedResolution.value,
@@ -1043,42 +1056,80 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
             : {}),
         },
       });
-
-      const prepared = await prepareNodeImage(resultUrl);
-      const metadataFrameNotes = nodeData.frames
-        .slice(0, safeRows * safeCols)
-        .map((frame) => {
-          const description = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
-          return sanitizeStoryboardText(description, ignoreAtTagWhenCopyingAndGenerating);
-        });
-      const imageWithMetadata = await embedStoryboardImageMetadata(prepared.imageUrl, {
-        gridRows: safeRows,
-        gridCols: safeCols,
-        frameNotes: metadataFrameNotes,
-      }).catch((error) => {
-        console.warn('[StoryboardMetadata] embed failed on generation output', error);
-        return prepared.imageUrl;
-      });
-      const previewWithMetadata = prepared.previewImageUrl === prepared.imageUrl
-        ? imageWithMetadata
-        : prepared.previewImageUrl;
-
-      // Update the new image node with generated result
+      const generationDebugContext: GenerationDebugContext = {
+        sourceType: 'storyboardGen',
+        providerId: selectedModel.providerId,
+        requestModel: requestResolution.requestModel,
+        requestSize: selectedResolution.value,
+        requestAspectRatio: resolvedRequestAspectRatio,
+        prompt,
+        extraParams: {
+          ...(nodeData.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
+        referenceImageCount: allReferenceImages.length,
+        referenceImagePlaceholders: createReferenceImagePlaceholders(allReferenceImages.length),
+        appVersion: runtimeDiagnostics.appVersion,
+        osName: runtimeDiagnostics.osName,
+        osVersion: runtimeDiagnostics.osVersion,
+        osBuild: runtimeDiagnostics.osBuild,
+        userAgent: runtimeDiagnostics.userAgent,
+      };
       updateNodeData(newNodeId, {
-        imageUrl: imageWithMetadata,
-        previewImageUrl: previewWithMetadata,
-        aspectRatio: prepared.aspectRatio,
-        isGenerating: false,
-        generationStartedAt: null,
+        generationJobId: jobId,
+        generationSourceType: 'storyboardGen',
+        generationProviderId: selectedModel.providerId,
+        generationClientSessionId: CURRENT_RUNTIME_SESSION_ID,
+        generationDebugContext,
+        generationStoryboardMetadata: {
+          gridRows: safeRows,
+          gridCols: safeCols,
+          frameNotes: metadataFrameNotes,
+        },
       });
     } catch (generationError) {
       const resolvedError = resolveErrorContent(generationError, '生成失败');
+      const generationDebugContext: GenerationDebugContext = {
+        sourceType: 'storyboardGen',
+        providerId: selectedModel.providerId,
+        requestModel: requestResolution.requestModel,
+        requestSize: selectedResolution.value,
+        requestAspectRatio: resolvedRequestAspectRatio,
+        prompt,
+        extraParams: {
+          ...(nodeData.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
+        referenceImageCount: incomingImages.length + 1,
+        referenceImagePlaceholders: createReferenceImagePlaceholders(incomingImages.length + 1),
+        appVersion: runtimeDiagnostics.appVersion,
+        osName: runtimeDiagnostics.osName,
+        osVersion: runtimeDiagnostics.osVersion,
+        osBuild: runtimeDiagnostics.osBuild,
+        userAgent: runtimeDiagnostics.userAgent,
+      };
+      const reportText = buildGenerationErrorReport({
+        errorMessage: resolvedError.message,
+        errorDetails: resolvedError.details,
+        context: generationDebugContext,
+      });
       setError(resolvedError.message);
-      void showErrorDialog(resolvedError.message, '错误', resolvedError.details);
+      void showErrorDialog(resolvedError.message, '错误', resolvedError.details, reportText);
       // Clear generating state and mark as failed
       updateNodeData(newNodeId, {
         isGenerating: false,
         generationStartedAt: null,
+        generationJobId: null,
+        generationProviderId: null,
+        generationClientSessionId: null,
+        generationStoryboardMetadata: undefined,
+        generationError: resolvedError.message,
+        generationErrorDetails: resolvedError.details ?? null,
+        generationDebugContext,
       });
     }
   }, [

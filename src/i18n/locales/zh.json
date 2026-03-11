@@ -58,6 +58,8 @@
     "reupload": "重新上传",
     "copy": "复制",
     "copyText": "复制文本",
+    "copyErrorReport": "复制报错",
+    "copied": "已复制",
     "download": "下载",
     "ungroup": "解散",
     "saveAs": "另存为...",
@@ -96,7 +98,8 @@
       "generatedAlt": "生成图",
       "waitingResult": "等待输出结果图片",
       "waitingResultDelayed": "已经等待 {{minutes}} 分钟了，还没有结果。继续等待中...",
-      "selectToEdit": "选中后在下方输入提示词生成或编辑图片"
+      "selectToEdit": "选中后在下方输入提示词生成或编辑图片",
+      "generationFailed": "生成失败"
     },
     "imageEdit": {
       "promptRequired": "请输入提示词",
@@ -273,7 +276,8 @@
     "applyIgnore": "应用忽略"
   },
   "errorDialog": {
-    "detailsTitle": "错误详情"
+    "detailsTitle": "错误详情",
+    "copyReport": "复制报错信息"
   }
 }
 

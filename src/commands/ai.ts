@@ -9,6 +9,15 @@ export interface GenerateRequest {
   extra_params?: Record<string, unknown>;
 }
 
+export type GenerationJobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'not_found';
+
+export interface GenerationJobStatus {
+  job_id: string;
+  status: GenerationJobState;
+  result?: string | null;
+  error?: string | null;
+}
+
 const BASE64_PREVIEW_HEAD = 96;
 const BASE64_PREVIEW_TAIL = 24;
 
@@ -163,6 +172,35 @@ export async function generateImage(request: GenerateRequest): Promise<string> {
     commandError.details = normalizedError.details;
     throw commandError;
   }
+}
+
+export async function submitGenerateImageJob(request: GenerateRequest): Promise<string> {
+  console.info('[AI] submit_generate_image_job request', {
+    ...sanitizeGenerateRequestForLog(request),
+    tauri: isTauri(),
+  });
+
+  if (!isTauri()) {
+    throw new Error('当前不是 Tauri 容器环境，请使用 `npm run tauri dev` 启动');
+  }
+
+  const jobId = await invoke<string>('submit_generate_image_job', { request });
+  if (typeof jobId !== 'string' || !jobId.trim()) {
+    throw new Error('submit_generate_image_job returned invalid job id');
+  }
+  return jobId.trim();
+}
+
+export async function getGenerateImageJob(jobId: string): Promise<GenerationJobStatus> {
+  if (!isTauri()) {
+    throw new Error('当前不是 Tauri 容器环境，请使用 `npm run tauri dev` 启动');
+  }
+
+  const result = await invoke<GenerationJobStatus>('get_generate_image_job', { jobId });
+  if (!result || typeof result !== 'object' || typeof result.status !== 'string') {
+    throw new Error('get_generate_image_job returned invalid payload');
+  }
+  return result;
 }
 
 export async function listModels(): Promise<string[]> {

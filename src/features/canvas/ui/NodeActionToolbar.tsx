@@ -28,6 +28,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { UI_POPOVER_TRANSITION_MS } from '@/components/ui/motion';
 import { sanitizeStoryboardText } from '@/features/canvas/application/storyboardText';
+import { buildGenerationErrorReport } from '@/features/canvas/application/generationErrorReport';
 import {
   NODE_TOOLBAR_ALIGN,
   NODE_TOOLBAR_CLASS,
@@ -67,9 +68,11 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
   const [isDownloadMenuVisible, setIsDownloadMenuVisible] = useState(false);
   const [isCopySuccess, setIsCopySuccess] = useState(false);
   const [isCopyTextSuccess, setIsCopyTextSuccess] = useState(false);
+  const [isCopyErrorSuccess, setIsCopyErrorSuccess] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTextFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyErrorFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downloadMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imageSource = useMemo(() => {
     if (isUploadNode(node) || isImageEditNode(node) || isExportImageNode(node)) {
@@ -78,6 +81,26 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
     return null;
   }, [node]);
   const canHandleImage = Boolean(imageSource);
+  const generationError =
+    isExportImageNode(node)
+    && typeof (node.data as { generationError?: unknown }).generationError === 'string'
+      ? ((node.data as { generationError?: string }).generationError ?? '').trim()
+      : '';
+  const generationErrorDetails =
+    isExportImageNode(node)
+    && typeof (node.data as { generationErrorDetails?: unknown }).generationErrorDetails === 'string'
+      ? ((node.data as { generationErrorDetails?: string }).generationErrorDetails ?? '').trim()
+      : '';
+  const canCopyGenerationError = isExportImageNode(node) && generationError.length > 0;
+  const generationErrorReport = useMemo(
+    () =>
+      buildGenerationErrorReport({
+        errorMessage: generationError || t('ai.error'),
+        errorDetails: generationErrorDetails || undefined,
+        context: (node.data as { generationDebugContext?: unknown }).generationDebugContext,
+      }),
+    [generationError, generationErrorDetails, node.data, t]
+  );
 
   const closeDownloadMenu = useCallback(() => {
     setIsDownloadMenuVisible(false);
@@ -145,6 +168,9 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
       }
       if (copyTextFeedbackTimerRef.current) {
         clearTimeout(copyTextFeedbackTimerRef.current);
+      }
+      if (copyErrorFeedbackTimerRef.current) {
+        clearTimeout(copyErrorFeedbackTimerRef.current);
       }
       if (downloadMenuCloseTimerRef.current) {
         clearTimeout(downloadMenuCloseTimerRef.current);
@@ -217,6 +243,27 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
       console.error('Failed to copy storyboard text', error);
     }
   }, [storyboardText]);
+
+  const handleCopyGenerationError = useCallback(async () => {
+    if (!canCopyGenerationError) {
+      return;
+    }
+
+    setIsCopyErrorSuccess(true);
+    if (copyErrorFeedbackTimerRef.current) {
+      clearTimeout(copyErrorFeedbackTimerRef.current);
+    }
+    copyErrorFeedbackTimerRef.current = setTimeout(() => {
+      setIsCopyErrorSuccess(false);
+      copyErrorFeedbackTimerRef.current = null;
+    }, 1100);
+
+    try {
+      await navigator.clipboard.writeText(generationErrorReport);
+    } catch (error) {
+      console.error('Failed to copy generation error report', error);
+    }
+  }, [canCopyGenerationError, generationErrorReport]);
 
   const handleDownloadSaveAs = useCallback(async () => {
     if (!imageSource) {
@@ -325,6 +372,22 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
           >
             <Copy className="h-3.5 w-3.5" />
             {t('nodeToolbar.copyText')}
+          </UiChipButton>
+        )}
+        {!isImageEdit && canCopyGenerationError && (
+          <UiChipButton
+            key="generation-error-copy"
+            className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} px-2.5 text-xs ${TOOLBAR_NEUTRAL_BUTTON_CLASS} ${
+              isCopyErrorSuccess
+                ? '!border-emerald-400/70 !bg-emerald-500/20 !text-emerald-200 hover:!bg-emerald-500/30'
+                : '!border-red-500/45 !bg-red-500/15 !text-red-200 hover:!bg-red-500/25'
+            }`}
+            onClick={() => {
+              void handleCopyGenerationError();
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            {isCopyErrorSuccess ? t('nodeToolbar.copied') : t('nodeToolbar.copyErrorReport')}
           </UiChipButton>
         )}
         {!isImageEdit && canHandleImage && (

@@ -26,7 +26,8 @@ import '@xyflow/react/dist/style.css';
 
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { canvasEventBus } from '@/features/canvas/application/canvasServices';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { canvasAiGateway, canvasEventBus } from '@/features/canvas/application/canvasServices';
 import {
   CANVAS_NODE_TYPES,
   type CanvasEdge,
@@ -34,11 +35,18 @@ import {
   type CanvasNodeType,
   DEFAULT_NODE_WIDTH,
 } from '@/features/canvas/domain/canvasNodes';
+import { prepareNodeImage } from '@/features/canvas/application/imageData';
+import {
+  buildGenerationErrorReport,
+  CURRENT_RUNTIME_SESSION_ID,
+} from '@/features/canvas/application/generationErrorReport';
+import { showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   getConnectMenuNodeTypes,
   nodeHasSourceHandle,
   nodeHasTargetHandle,
 } from '@/features/canvas/domain/nodeRegistry';
+import { embedStoryboardImageMetadata } from '@/commands/image';
 import { nodeTypes } from './nodes';
 import { edgeTypes } from './edges';
 import { NodeSelectionMenu } from './NodeSelectionMenu';
@@ -86,6 +94,13 @@ interface DuplicateResult {
 }
 
 const ALT_DRAG_COPY_Z_INDEX = 2000;
+const GENERATION_JOB_POLL_INTERVAL_MS = 1400;
+
+interface GenerationStoryboardMetadata {
+  gridRows: number;
+  gridCols: number;
+  frameNotes: string[];
+}
 
 function getNodeSize(node: CanvasNode): { width: number; height: number } {
   const styleWidth = typeof node.style?.width === 'number' ? node.style.width : null;
@@ -237,6 +252,7 @@ export function Canvas() {
   const copiedSnapshotRef = useRef<ClipboardSnapshot | null>(null);
   const pasteIterationRef = useRef(0);
   const pasteImageHandledRef = useRef(false);
+  const activeGenerationPollNodeIdsRef = useRef(new Set<string>());
   const duplicateNodesRef = useRef<((sourceNodeIds: string[]) => string | null) | null>(null);
   const altDragCopyRef = useRef<{
     sourceNodeIds: string[];
@@ -263,6 +279,7 @@ export function Canvas() {
   const applyEdgesChange = useCanvasStore((state) => state.onEdgesChange);
   const connectNodes = useCanvasStore((state) => state.onConnect);
   const setCanvasData = useCanvasStore((state) => state.setCanvasData);
+  const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const addNode = useCanvasStore((state) => state.addNode);
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
@@ -279,6 +296,7 @@ export function Canvas() {
   const imageViewer = useCanvasStore((state) => state.imageViewer);
   const closeImageViewer = useCanvasStore((state) => state.closeImageViewer);
   const navigateImageViewer = useCanvasStore((state) => state.navigateImageViewer);
+  const apiKeys = useSettingsStore((state) => state.apiKeys);
 
   const getCurrentProject = useProjectStore((state) => state.getCurrentProject);
   const saveCurrentProject = useProjectStore((state) => state.saveCurrentProject);
@@ -369,6 +387,147 @@ export function Canvas() {
 
     scheduleCanvasPersist();
   }, [nodes, edges, history, dragHistorySnapshot, scheduleCanvasPersist]);
+
+  useEffect(() => {
+    const sleep = (delayMs: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, delayMs);
+      });
+
+    const pendingExportNodes = nodes.filter((node) => {
+      if (node.type !== CANVAS_NODE_TYPES.exportImage) {
+        return false;
+      }
+      const data = node.data as Record<string, unknown>;
+      return data.isGenerating === true && typeof data.generationJobId === 'string' && data.generationJobId.length > 0;
+    });
+
+    for (const pendingNode of pendingExportNodes) {
+      if (activeGenerationPollNodeIdsRef.current.has(pendingNode.id)) {
+        continue;
+      }
+      activeGenerationPollNodeIdsRef.current.add(pendingNode.id);
+
+      void (async () => {
+        try {
+          while (true) {
+            const currentNode = useCanvasStore.getState().nodes.find((node) => node.id === pendingNode.id);
+            if (!currentNode) {
+              break;
+            }
+
+            const currentData = currentNode.data as Record<string, unknown>;
+            const jobId = typeof currentData.generationJobId === 'string' ? currentData.generationJobId : '';
+            const isGenerating = currentData.isGenerating === true;
+            if (!jobId || !isGenerating) {
+              break;
+            }
+
+            const generationProviderId = typeof currentData.generationProviderId === 'string'
+              ? currentData.generationProviderId
+              : '';
+            if (generationProviderId) {
+              const providerApiKey = apiKeys[generationProviderId] ?? '';
+              if (providerApiKey) {
+                await canvasAiGateway.setApiKey(generationProviderId, providerApiKey).catch((error) => {
+                  console.warn('[GenerationJob] set_api_key failed before poll', {
+                    nodeId: pendingNode.id,
+                    generationProviderId,
+                    error,
+                  });
+                });
+              }
+            }
+
+            const status = await canvasAiGateway.getGenerateImageJob(jobId).catch((error) => {
+              console.warn('[GenerationJob] poll failed', { nodeId: pendingNode.id, jobId, error });
+              return null;
+            });
+            if (!status) {
+              await sleep(GENERATION_JOB_POLL_INTERVAL_MS);
+              continue;
+            }
+
+            if (status.status === 'queued' || status.status === 'running') {
+              await sleep(GENERATION_JOB_POLL_INTERVAL_MS);
+              continue;
+            }
+
+            if (status.status === 'succeeded' && typeof status.result === 'string' && status.result.trim()) {
+              const prepared = await prepareNodeImage(status.result);
+              const storyboardMetadataRaw = currentData.generationStoryboardMetadata as GenerationStoryboardMetadata | undefined;
+              const hasStoryboardMetadata = Boolean(
+                storyboardMetadataRaw
+                && Number.isFinite(storyboardMetadataRaw.gridRows)
+                && Number.isFinite(storyboardMetadataRaw.gridCols)
+                && Array.isArray(storyboardMetadataRaw.frameNotes)
+              );
+              let imageWithMetadata = prepared.imageUrl;
+              if (hasStoryboardMetadata && storyboardMetadataRaw) {
+                imageWithMetadata = await embedStoryboardImageMetadata(prepared.imageUrl, {
+                  gridRows: Math.max(1, Math.round(storyboardMetadataRaw.gridRows)),
+                  gridCols: Math.max(1, Math.round(storyboardMetadataRaw.gridCols)),
+                  frameNotes: storyboardMetadataRaw.frameNotes,
+                }).catch((error) => {
+                  console.warn('[GenerationJob] embed storyboard metadata failed', {
+                    nodeId: pendingNode.id,
+                    error,
+                  });
+                  return prepared.imageUrl;
+                });
+              }
+              const previewWithMetadata = prepared.previewImageUrl === prepared.imageUrl
+                ? imageWithMetadata
+                : prepared.previewImageUrl;
+
+              updateNodeData(pendingNode.id, {
+                imageUrl: imageWithMetadata,
+                previewImageUrl: previewWithMetadata,
+                aspectRatio: prepared.aspectRatio,
+                isGenerating: false,
+                generationStartedAt: null,
+                generationJobId: null,
+                generationProviderId: null,
+                generationClientSessionId: null,
+                generationStoryboardMetadata: undefined,
+                generationError: null,
+                generationErrorDetails: null,
+                generationDebugContext: undefined,
+              });
+              break;
+            }
+
+            const errorMessage = status.error ?? (status.status === 'not_found' ? 'generation job not found' : 'generation failed');
+            const generationClientSessionId = typeof currentData.generationClientSessionId === 'string'
+              ? currentData.generationClientSessionId
+              : '';
+            const shouldShowDialog = generationClientSessionId === CURRENT_RUNTIME_SESSION_ID;
+            if (shouldShowDialog) {
+              const reportText = buildGenerationErrorReport({
+                errorMessage,
+                errorDetails: status.error ?? undefined,
+                context: currentData.generationDebugContext,
+              });
+              void showErrorDialog(errorMessage, t('common.error'), status.error ?? undefined, reportText);
+            }
+            updateNodeData(pendingNode.id, {
+              isGenerating: false,
+              generationStartedAt: null,
+              generationJobId: null,
+              generationProviderId: null,
+              generationClientSessionId: null,
+              generationStoryboardMetadata: undefined,
+              generationError: errorMessage,
+              generationErrorDetails: status.error ?? null,
+            });
+            break;
+          }
+        } finally {
+          activeGenerationPollNodeIdsRef.current.delete(pendingNode.id);
+        }
+      })();
+    }
+  }, [apiKeys, nodes, updateNodeData]);
 
   useEffect(() => {
     const element = wrapperRef.current;
@@ -937,6 +1096,27 @@ export function Canvas() {
         }
         if ('generationStartedAt' in (data as Record<string, unknown>)) {
           (data as { generationStartedAt?: number | null }).generationStartedAt = null;
+        }
+        if ('generationJobId' in (data as Record<string, unknown>)) {
+          (data as { generationJobId?: string | null }).generationJobId = null;
+        }
+        if ('generationProviderId' in (data as Record<string, unknown>)) {
+          (data as { generationProviderId?: string | null }).generationProviderId = null;
+        }
+        if ('generationClientSessionId' in (data as Record<string, unknown>)) {
+          (data as { generationClientSessionId?: string | null }).generationClientSessionId = null;
+        }
+        if ('generationStoryboardMetadata' in (data as Record<string, unknown>)) {
+          (data as { generationStoryboardMetadata?: unknown }).generationStoryboardMetadata = undefined;
+        }
+        if ('generationError' in (data as Record<string, unknown>)) {
+          (data as { generationError?: string | null }).generationError = null;
+        }
+        if ('generationErrorDetails' in (data as Record<string, unknown>)) {
+          (data as { generationErrorDetails?: string | null }).generationErrorDetails = null;
+        }
+        if ('generationDebugContext' in (data as Record<string, unknown>)) {
+          (data as { generationDebugContext?: unknown }).generationDebugContext = undefined;
         }
 
         const nextNodeId = addNode(

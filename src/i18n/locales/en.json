@@ -58,6 +58,8 @@
     "reupload": "Reupload",
     "copy": "Copy",
     "copyText": "Copy Text",
+    "copyErrorReport": "Copy Error",
+    "copied": "Copied",
     "download": "Download",
     "ungroup": "Ungroup",
     "saveAs": "Save as...",
@@ -96,7 +98,8 @@
       "generatedAlt": "Generated image",
       "waitingResult": "Waiting for output image",
       "waitingResultDelayed": "Already waited {{minutes}} minutes with no result yet. Still waiting...",
-      "selectToEdit": "Select this node and enter a prompt below to generate or edit image"
+      "selectToEdit": "Select this node and enter a prompt below to generate or edit image",
+      "generationFailed": "Generation failed"
     },
     "imageEdit": {
       "promptRequired": "Please enter a prompt",
@@ -273,7 +276,8 @@
     "applyIgnore": "Apply ignore"
   },
   "errorDialog": {
-    "detailsTitle": "Error details"
+    "detailsTitle": "Error details",
+    "copyReport": "Copy error report"
   }
 }
 

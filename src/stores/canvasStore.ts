@@ -242,11 +242,17 @@ function normalizeNodes(rawNodes: CanvasNode[]): CanvasNode[] {
         mergedData.aspectRatio = DEFAULT_ASPECT_RATIO;
       }
 
-      // Generation tasks do not survive app reload, reset transient generating state.
+      // Keep generation state only when there is a recoverable job id.
       if ('isGenerating' in mergedData && mergedData.isGenerating) {
-        mergedData.isGenerating = false;
-        if ('generationStartedAt' in mergedData) {
-          mergedData.generationStartedAt = null;
+        const generationJobId =
+          typeof (mergedData as { generationJobId?: unknown }).generationJobId === 'string'
+            ? (mergedData as { generationJobId?: string }).generationJobId?.trim() ?? ''
+            : '';
+        if (!generationJobId) {
+          mergedData.isGenerating = false;
+          if ('generationStartedAt' in mergedData) {
+            mergedData.generationStartedAt = null;
+          }
         }
       }
 

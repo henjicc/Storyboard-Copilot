@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
-import { Image as ImageIcon, Sparkles } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -47,6 +47,12 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
   const [now, setNow] = useState(() => Date.now());
   const isExportResultNode = type === CANVAS_NODE_TYPES.exportImage;
   const isGenerating = typeof data.isGenerating === 'boolean' ? data.isGenerating : false;
+  const generationError =
+    typeof (data as { generationError?: unknown }).generationError === 'string'
+      ? ((data as { generationError?: string }).generationError ?? '').trim()
+      : '';
+  const hasGenerationError =
+    isExportResultNode && !isGenerating && !data.imageUrl && generationError.length > 0;
   const generationStartedAt =
     typeof data.generationStartedAt === 'number' ? data.generationStartedAt : null;
   const generationDurationMs =
@@ -134,7 +140,11 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
     <div
       className={`
         group relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-colors duration-150
-        ${selected
+        ${hasGenerationError
+          ? (selected
+            ? 'border-red-400 shadow-[0_0_0_1px_rgba(248,113,113,0.42)]'
+            : 'border-red-500/70 bg-[rgba(127,29,29,0.12)] hover:border-red-400/80 dark:border-red-500/70 dark:hover:border-red-400/80')
+          : selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(15,23,42,0.22)] hover:border-[rgba(15,23,42,0.34)] dark:border-[rgba(255,255,255,0.22)] dark:hover:border-[rgba(255,255,255,0.34)]'}
       `}
@@ -153,7 +163,7 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
       />
 
       <div
-        className="relative h-full w-full overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
+        className={`relative h-full w-full overflow-hidden rounded-[var(--node-radius)] ${hasGenerationError ? 'bg-[rgba(127,29,29,0.2)]' : 'bg-bg-dark'}`}
       >
         {data.imageUrl ? (
           <CanvasNodeImage
@@ -162,6 +172,16 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
             viewerSourceUrl={originalImageUrl}
             className="h-full w-full object-contain"
           />
+        ) : hasGenerationError ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-red-300">
+            <AlertTriangle className="h-7 w-7 opacity-90" />
+            <span className="text-center text-[12px] font-medium leading-5 text-red-200">
+              {t('node.imageNode.generationFailed')}
+            </span>
+            <span className="max-h-[88px] overflow-y-auto break-words text-center text-[11px] leading-5 text-red-200/90">
+              {generationError}
+            </span>
+          </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted/85">
             {isExportResultNode ? (

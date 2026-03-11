@@ -240,6 +240,7 @@ function App() {
           title={globalError?.title ?? ''}
           message={globalError?.message ?? ''}
           details={globalError?.details}
+          copyText={globalError?.copyText}
           onClose={() => setGlobalError(null)}
         />
       </div>

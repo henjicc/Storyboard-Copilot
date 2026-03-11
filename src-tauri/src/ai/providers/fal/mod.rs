@@ -7,7 +7,9 @@ use tokio::time::{sleep, Duration};
 use tracing::info;
 
 use crate::ai::error::AIError;
-use crate::ai::{AIProvider, GenerateRequest};
+use crate::ai::{
+    AIProvider, GenerateRequest, ProviderTaskHandle, ProviderTaskPollResult, ProviderTaskSubmission,
+};
 
 const FAL_QUEUE_BASE_URL: &str = "https://queue.fal.run";
 const FAL_NANO_BANANA_2_T2I_MODEL_PATH: &str = "fal-ai/nano-banana-2";
@@ -85,6 +87,52 @@ impl FalProvider {
             }
         }
     }
+
+    fn resolve_poll_endpoints(
+        request_id: &str,
+        metadata: Option<&Value>,
+    ) -> (Vec<String>, Vec<String>) {
+        let model_path_from_metadata = metadata
+            .and_then(|raw| raw.get("model_path"))
+            .and_then(|raw| raw.as_str())
+            .map(|raw| raw.to_string());
+        let submit_status_url = metadata
+            .and_then(|raw| raw.get("status_url"))
+            .and_then(|raw| raw.as_str())
+            .map(|raw| raw.to_string());
+        let submit_response_url = metadata
+            .and_then(|raw| raw.get("response_url"))
+            .and_then(|raw| raw.as_str())
+            .map(|raw| raw.to_string());
+
+        let model_path = model_path_from_metadata.unwrap_or_else(|| FAL_NANO_BANANA_2_T2I_MODEL_PATH.to_string());
+        let status_endpoint = format!(
+            "{}/{}/requests/{}/status",
+            FAL_QUEUE_BASE_URL, model_path, request_id
+        );
+        let result_endpoint = format!(
+            "{}/{}/requests/{}",
+            FAL_QUEUE_BASE_URL, model_path, request_id
+        );
+        let fallback_status_endpoint = format!("{}/requests/{}/status", FAL_QUEUE_BASE_URL, request_id);
+        let fallback_result_endpoint = format!("{}/requests/{}", FAL_QUEUE_BASE_URL, request_id);
+
+        let mut status_endpoints = Vec::new();
+        if let Some(url) = submit_status_url {
+            status_endpoints.push(url);
+        }
+        status_endpoints.push(status_endpoint);
+        status_endpoints.push(fallback_status_endpoint);
+
+        let mut result_endpoints = Vec::new();
+        if let Some(url) = submit_response_url {
+            result_endpoints.push(url);
+        }
+        result_endpoints.push(result_endpoint);
+        result_endpoints.push(fallback_result_endpoint);
+
+        (status_endpoints, result_endpoints)
+    }
 }
 
 impl Default for FalProvider {
@@ -119,7 +167,11 @@ impl AIProvider for FalProvider {
         Ok(())
     }
 
-    async fn generate(&self, request: GenerateRequest) -> Result<String, AIError> {
+    fn supports_task_resume(&self) -> bool {
+        true
+    }
+
+    async fn submit_task(&self, request: GenerateRequest) -> Result<ProviderTaskSubmission, AIError> {
         let api_key = self
             .api_key
             .read()
@@ -156,8 +208,6 @@ impl AIProvider for FalProvider {
             input["image_urls"] = json!(reference_images);
         }
 
-        let submit_body = input;
-
         info!(
             "[FAL Request] model: {}, route: {}, size: {}, aspect_ratio: {}, web_search: {}",
             request.model, model_path, request.size, request.aspect_ratio, enable_web_search
@@ -168,7 +218,7 @@ impl AIProvider for FalProvider {
             .header("Authorization", format!("Key {}", api_key))
             .header("Content-Type", "application/json")
             .header("X-Fal-No-Retry", "1")
-            .json(&submit_body)
+            .json(&input)
             .send()
             .await?;
 
@@ -188,132 +238,130 @@ impl AIProvider for FalProvider {
                 err, submit_raw
             ))
         })?;
-        let request_id = submit_body.request_id;
-        let submit_status_url = submit_body.status_url;
-        let submit_response_url = submit_body.response_url;
 
-        let status_endpoint = format!(
-            "{}/{}/requests/{}/status",
-            FAL_QUEUE_BASE_URL, model_path, request_id
-        );
-        let result_endpoint = format!(
-            "{}/{}/requests/{}",
-            FAL_QUEUE_BASE_URL, model_path, request_id
-        );
-        let fallback_status_endpoint = format!(
-            "{}/requests/{}/status",
-            FAL_QUEUE_BASE_URL, request_id
-        );
-        let fallback_result_endpoint = format!(
-            "{}/requests/{}",
-            FAL_QUEUE_BASE_URL, request_id
-        );
-        let status_endpoints = [
-            submit_status_url,
-            Some(status_endpoint),
-            Some(fallback_status_endpoint),
-        ];
-        let result_endpoints = [
-            submit_response_url,
-            Some(result_endpoint),
-            Some(fallback_result_endpoint),
-        ];
+        Ok(ProviderTaskSubmission::Queued(ProviderTaskHandle {
+            task_id: submit_body.request_id,
+            metadata: Some(json!({
+                "model_path": model_path,
+                "status_url": submit_body.status_url,
+                "response_url": submit_body.response_url
+            })),
+        }))
+    }
 
-        loop {
-            let mut status_body: Option<FalStatusResponse> = None;
-            let mut last_status_error: Option<String> = None;
-            for endpoint in status_endpoints.iter().flatten() {
-                let response = self
-                    .client
-                    .get(endpoint)
-                    .header("Authorization", format!("Key {}", api_key))
-                    .send()
-                    .await?;
-                if response.status().is_success() {
-                    status_body = Some(response.json::<FalStatusResponse>().await?);
-                    break;
-                }
-                let status = response.status();
-                let error_text = response.text().await.unwrap_or_default();
-                last_status_error = Some(format!("{} {} -> {}", endpoint, status, error_text));
-                if status != reqwest::StatusCode::METHOD_NOT_ALLOWED
-                    && status != reqwest::StatusCode::NOT_FOUND
-                {
-                    return Err(AIError::Provider(format!(
-                        "FAL status check failed {}: {}",
-                        status, error_text
-                    )));
-                }
+    async fn poll_task(&self, handle: ProviderTaskHandle) -> Result<ProviderTaskPollResult, AIError> {
+        let api_key = self
+            .api_key
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AIError::InvalidRequest("API key not set".to_string()))?;
+
+        let (status_endpoints, result_endpoints) =
+            Self::resolve_poll_endpoints(handle.task_id.as_str(), handle.metadata.as_ref());
+
+        let mut status_body: Option<FalStatusResponse> = None;
+        let mut last_status_error: Option<String> = None;
+        for endpoint in status_endpoints {
+            let response = self
+                .client
+                .get(endpoint.as_str())
+                .header("Authorization", format!("Key {}", api_key))
+                .send()
+                .await?;
+            if response.status().is_success() {
+                status_body = Some(response.json::<FalStatusResponse>().await?);
+                break;
             }
-            let status_body = status_body.ok_or_else(|| {
-                AIError::Provider(format!(
-                    "FAL status check failed on all endpoints: {}",
-                    last_status_error.unwrap_or_else(|| "unknown".to_string())
-                ))
-            })?;
-            match status_body.status.as_str() {
-                "IN_QUEUE" | "IN_PROGRESS" => {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            last_status_error = Some(format!("{} {} -> {}", endpoint, status, error_text));
+            if status != reqwest::StatusCode::METHOD_NOT_ALLOWED
+                && status != reqwest::StatusCode::NOT_FOUND
+            {
+                return Err(AIError::Provider(format!(
+                    "FAL status check failed {}: {}",
+                    status, error_text
+                )));
+            }
+        }
+        let status_body = status_body.ok_or_else(|| {
+            AIError::Provider(format!(
+                "FAL status check failed on all endpoints: {}",
+                last_status_error.unwrap_or_else(|| "unknown".to_string())
+            ))
+        })?;
+
+        match status_body.status.as_str() {
+            "IN_QUEUE" | "IN_PROGRESS" => Ok(ProviderTaskPollResult::Running),
+            "COMPLETED" => {
+                let mut result_raw: Option<String> = None;
+                let mut last_result_error: Option<String> = None;
+                for endpoint in result_endpoints {
+                    let response = self
+                        .client
+                        .get(endpoint.as_str())
+                        .header("Authorization", format!("Key {}", api_key))
+                        .send()
+                        .await?;
+                    if response.status().is_success() {
+                        result_raw = Some(response.text().await.unwrap_or_default());
+                        break;
+                    }
+                    let status = response.status();
+                    let error_text = response.text().await.unwrap_or_default();
+                    last_result_error = Some(format!("{} {} -> {}", endpoint, status, error_text));
+                    if status != reqwest::StatusCode::METHOD_NOT_ALLOWED
+                        && status != reqwest::StatusCode::NOT_FOUND
+                    {
+                        return Err(AIError::Provider(format!(
+                            "FAL result fetch failed {}: {}",
+                            status, error_text
+                        )));
+                    }
+                }
+                let result_raw = result_raw.ok_or_else(|| {
+                    AIError::Provider(format!(
+                        "FAL result fetch failed on all endpoints: {}",
+                        last_result_error.unwrap_or_else(|| "unknown".to_string())
+                    ))
+                })?;
+                let result_body = serde_json::from_str::<Value>(&result_raw).map_err(|err| {
+                    AIError::Provider(format!(
+                        "FAL result invalid JSON response: {}; raw={}",
+                        err, result_raw
+                    ))
+                })?;
+                if let Some(url) = Self::extract_result_url(&result_body) {
+                    return Ok(ProviderTaskPollResult::Succeeded(url));
+                }
+
+                Err(AIError::Provider(format!(
+                    "FAL result has no image URL: {}",
+                    result_body
+                )))
+            }
+            "FAILED" | "ERROR" | "CANCELLED" => Ok(ProviderTaskPollResult::Failed(format!(
+                "FAL task ended with status {}",
+                status_body.status
+            ))),
+            other => Err(AIError::Provider(format!("FAL unexpected status: {}", other))),
+        }
+    }
+
+    async fn generate(&self, request: GenerateRequest) -> Result<String, AIError> {
+        let submitted = self.submit_task(request).await?;
+        let handle = match submitted {
+            ProviderTaskSubmission::Succeeded(result) => return Ok(result),
+            ProviderTaskSubmission::Queued(handle) => handle,
+        };
+        loop {
+            match self.poll_task(handle.clone()).await? {
+                ProviderTaskPollResult::Running => {
                     sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
                 }
-                "COMPLETED" => {
-                    let mut result_raw: Option<String> = None;
-                    let mut last_result_error: Option<String> = None;
-                    for endpoint in result_endpoints.iter().flatten() {
-                        let response = self
-                            .client
-                            .get(endpoint)
-                            .header("Authorization", format!("Key {}", api_key))
-                            .send()
-                            .await?;
-                        if response.status().is_success() {
-                            result_raw = Some(response.text().await.unwrap_or_default());
-                            break;
-                        }
-                        let status = response.status();
-                        let error_text = response.text().await.unwrap_or_default();
-                        last_result_error = Some(format!("{} {} -> {}", endpoint, status, error_text));
-                        if status != reqwest::StatusCode::METHOD_NOT_ALLOWED
-                            && status != reqwest::StatusCode::NOT_FOUND
-                        {
-                            return Err(AIError::Provider(format!(
-                                "FAL result fetch failed {}: {}",
-                                status, error_text
-                            )));
-                        }
-                    }
-                    let result_raw = result_raw.ok_or_else(|| {
-                        AIError::Provider(format!(
-                            "FAL result fetch failed on all endpoints: {}",
-                            last_result_error.unwrap_or_else(|| "unknown".to_string())
-                        ))
-                    })?;
-                    let result_body = serde_json::from_str::<Value>(&result_raw).map_err(|err| {
-                        AIError::Provider(format!(
-                            "FAL result invalid JSON response: {}; raw={}",
-                            err, result_raw
-                        ))
-                    })?;
-                    if let Some(url) = Self::extract_result_url(&result_body) {
-                        return Ok(url);
-                    }
-
-                    return Err(AIError::Provider(format!(
-                        "FAL result has no image URL: {}",
-                        result_body
-                    )));
-                }
-                "FAILED" | "ERROR" | "CANCELLED" => {
-                    return Err(AIError::TaskFailed(format!(
-                        "FAL task ended with status {}",
-                        status_body.status
-                    )));
-                }
-                other => {
-                    return Err(AIError::Provider(format!(
-                        "FAL unexpected status: {}",
-                        other
-                    )));
-                }
+                ProviderTaskPollResult::Succeeded(url) => return Ok(url),
+                ProviderTaskPollResult::Failed(message) => return Err(AIError::TaskFailed(message)),
             }
         }
     }

@@ -11,7 +11,9 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::ai::error::AIError;
-use crate::ai::{AIProvider, GenerateRequest};
+use crate::ai::{
+    AIProvider, GenerateRequest, ProviderTaskHandle, ProviderTaskPollResult, ProviderTaskSubmission,
+};
 
 const TASK_BASE_URL: &str = "https://api.kie.ai";
 const FILE_BASE_URL: &str = "https://kieai.redpandaai.co";
@@ -350,67 +352,75 @@ impl KieProvider {
             .and_then(|urls| urls.into_iter().find(|url| !url.is_empty()))
     }
 
-    async fn poll_task(&self, api_key: &str, task_id: &str) -> Result<String, AIError> {
+    async fn poll_task_once(
+        &self,
+        api_key: &str,
+        task_id: &str,
+    ) -> Result<ProviderTaskPollResult, AIError> {
         let endpoint = format!("{}{}", TASK_BASE_URL, RECORD_INFO_PATH);
-        loop {
-            let response = self
-                .client
-                .get(&endpoint)
-                .header("Authorization", format!("Bearer {}", api_key))
-                .query(&[("taskId", task_id)])
-                .send()
-                .await?;
+        let response = self
+            .client
+            .get(&endpoint)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .query(&[("taskId", task_id)])
+            .send()
+            .await?;
 
-            let status = response.status();
-            let raw_response = response.text().await.unwrap_or_default();
-            if !status.is_success() {
-                return Err(AIError::Provider(format!(
-                    "KIE recordInfo failed {}: {}",
-                    status, raw_response
-                )));
-            }
+        let status = response.status();
+        let raw_response = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(AIError::Provider(format!(
+                "KIE recordInfo failed {}: {}",
+                status, raw_response
+            )));
+        }
 
-            let body = serde_json::from_str::<KieTaskInfoResponse>(&raw_response).map_err(|err| {
-                AIError::Provider(format!(
-                    "KIE recordInfo invalid JSON response: {}; raw={}",
-                    err,
-                    raw_response
+        let body = serde_json::from_str::<KieTaskInfoResponse>(&raw_response).map_err(|err| {
+            AIError::Provider(format!(
+                "KIE recordInfo invalid JSON response: {}; raw={}",
+                err,
+                raw_response
+            ))
+        })?;
+        if body.code != 200 {
+            let message = body
+                .message
+                .or(body.msg)
+                .unwrap_or_else(|| "unknown query error".to_string());
+            return Err(AIError::Provider(format!("KIE task query rejected: {}", message)));
+        }
+
+        let data = body
+            .data
+            .ok_or_else(|| AIError::Provider("KIE task query missing data".to_string()))?;
+        match data.state.as_deref() {
+            Some("success") => {
+                let result_json = data.result_json.ok_or_else(|| {
+                    AIError::Provider("KIE success response missing resultJson".to_string())
+                })?;
+                if let Some(url) = Self::extract_result_url(&result_json) {
+                    return Ok(ProviderTaskPollResult::Succeeded(url));
+                }
+                Err(AIError::Provider(
+                    "KIE resultJson has no valid result URL".to_string(),
                 ))
-            })?;
-            if body.code != 200 {
-                let message = body
-                    .message
-                    .or(body.msg)
-                    .unwrap_or_else(|| "unknown query error".to_string());
-                return Err(AIError::Provider(format!("KIE task query rejected: {}", message)));
             }
+            Some("fail") => Ok(ProviderTaskPollResult::Failed(
+                data.fail_msg.unwrap_or_else(|| "KIE task failed".to_string()),
+            )),
+            Some("waiting") | Some("queuing") | Some("generating") | None => {
+                Ok(ProviderTaskPollResult::Running)
+            }
+            Some(other) => Err(AIError::Provider(format!("KIE unexpected task state: {}", other))),
+        }
+    }
 
-            let data = body
-                .data
-                .ok_or_else(|| AIError::Provider("KIE task query missing data".to_string()))?;
-            match data.state.as_deref() {
-                Some("success") => {
-                    let result_json = data.result_json.ok_or_else(|| {
-                        AIError::Provider("KIE success response missing resultJson".to_string())
-                    })?;
-                    if let Some(url) = Self::extract_result_url(&result_json) {
-                        return Ok(url);
-                    }
-                    return Err(AIError::Provider(
-                        "KIE resultJson has no valid result URL".to_string(),
-                    ));
-                }
-                Some("fail") => {
-                    return Err(AIError::TaskFailed(
-                        data.fail_msg.unwrap_or_else(|| "KIE task failed".to_string()),
-                    ));
-                }
-                Some("waiting") | Some("queuing") | Some("generating") | None => {
-                    sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
-                }
-                Some(other) => {
-                    return Err(AIError::Provider(format!("KIE unexpected task state: {}", other)));
-                }
+    async fn poll_task_until_complete(&self, api_key: &str, task_id: &str) -> Result<String, AIError> {
+        loop {
+            match self.poll_task_once(api_key, task_id).await? {
+                ProviderTaskPollResult::Running => sleep(Duration::from_millis(POLL_INTERVAL_MS)).await,
+                ProviderTaskPollResult::Succeeded(url) => return Ok(url),
+                ProviderTaskPollResult::Failed(message) => return Err(AIError::TaskFailed(message)),
             }
         }
     }
@@ -448,6 +458,44 @@ impl AIProvider for KieProvider {
         Ok(())
     }
 
+    fn supports_task_resume(&self) -> bool {
+        true
+    }
+
+    async fn submit_task(&self, request: GenerateRequest) -> Result<ProviderTaskSubmission, AIError> {
+        let api_key = self
+            .api_key
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AIError::InvalidRequest("API key not set".to_string()))?;
+        let model = Self::sanitize_model(&request.model);
+        let uploaded_images = self
+            .upload_reference_images(
+                &api_key,
+                &model,
+                request.reference_images.as_deref().unwrap_or(&[]),
+            )
+            .await?;
+        let task_id = self
+            .create_task(&api_key, &request, &model, uploaded_images)
+            .await?;
+        Ok(ProviderTaskSubmission::Queued(ProviderTaskHandle {
+            task_id,
+            metadata: None,
+        }))
+    }
+
+    async fn poll_task(&self, handle: ProviderTaskHandle) -> Result<ProviderTaskPollResult, AIError> {
+        let api_key = self
+            .api_key
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AIError::InvalidRequest("API key not set".to_string()))?;
+        self.poll_task_once(&api_key, handle.task_id.as_str()).await
+    }
+
     async fn generate(&self, request: GenerateRequest) -> Result<String, AIError> {
         let api_key = self
             .api_key
@@ -474,6 +522,6 @@ impl AIProvider for KieProvider {
         let task_id = self
             .create_task(&api_key, &request, &model, uploaded_images)
             .await?;
-        self.poll_task(&api_key, &task_id).await
+        self.poll_task_until_complete(&api_key, &task_id).await
     }
 }

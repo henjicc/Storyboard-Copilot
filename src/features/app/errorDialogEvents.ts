@@ -2,6 +2,7 @@ export interface GlobalErrorDialogDetail {
   title: string;
   message: string;
   details?: string;
+  copyText?: string;
 }
 
 const OPEN_ERROR_DIALOG_EVENT = 'storyboard:open-error-dialog';
