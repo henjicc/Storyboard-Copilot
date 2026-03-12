@@ -249,6 +249,8 @@
     "providerRegisterLink": "点击这里注册",
     "providerApiKeyGuideMiddle": "，然后",
     "getApiKeyLink": "点击这里获取密钥",
+    "missingAnyApiKeyMessage": "您尚未配置任何密钥，请打开设置进行配置。",
+    "openProvidersSettings": "打开设置",
     "aboutAppName": "分镜助手",
     "aboutIntro": "基于节点画布的 AI 分镜工作台，一站式完成图片生成、编辑与分镜流程。",
     "aboutVersionLabel": "版本",

@@ -34,7 +34,7 @@ interface SettingsCheckboxCardProps {
 const PROVIDER_REGISTER_URLS: Record<string, string> = {
   ppio: 'https://ppio.com/user/register?invited_by=WGY0DZ',
   grsai: 'https://grsai.com',
-  kie: 'https://kie.ai',
+  kie: 'https://kie.ai?ref=eef20ef0b0595cad227d45b29c635f6c',
   fal: 'https://fal.ai',
 };
 
@@ -133,7 +133,7 @@ export function SettingsDialog({
     setEnableUpdateDialog,
   } = useSettingsStore();
   const providers = useMemo(() => {
-    const providerOrder = ['ppio', 'fal', 'kie', 'grsai'];
+    const providerOrder = ['kie', 'ppio', 'fal', 'grsai'];
     const providerIndex = new Map(providerOrder.map((id, index) => [id, index]));
     return listModelProviders().slice().sort((left, right) => {
       const leftIndex = providerIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER;
@@ -211,7 +211,6 @@ export function SettingsDialog({
     if (!isOpen) {
       return;
     }
-    setActiveCategory(initialCategory);
     setLocalApiKeys(apiKeys);
     setLocalDownloadPresetPaths(downloadPresetPaths);
     setLocalGrsaiNanoBananaProModel(grsaiNanoBananaProModel);
@@ -237,30 +236,16 @@ export function SettingsDialog({
     setRevealedApiKeys({});
     setLocalDownloadPathInput('');
   }, [
-    apiKeys,
-    downloadPresetPaths,
-    grsaiNanoBananaProModel,
     isOpen,
-    useUploadFilenameAsNodeTitle,
-    storyboardGenKeepStyleConsistent,
-    storyboardGenDisableTextInImage,
-    storyboardGenAutoInferEmptyFrame,
-    ignoreAtTagWhenCopyingAndGenerating,
-    enableStoryboardGenGridPreviewShortcut,
-    showStoryboardGenAdvancedRatioControls,
-    showNodePrice,
-    priceDisplayCurrencyMode,
-    usdToCnyRate,
-    preferDiscountedPrice,
-    grsaiCreditTierId,
-    uiRadiusPreset,
-    themeTonePreset,
-    accentColor,
-    canvasEdgeRoutingMode,
-    autoCheckAppUpdateOnLaunch,
-    enableUpdateDialog,
-    initialCategory,
   ]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setActiveCategory(initialCategory);
+  }, [initialCategory, isOpen]);
 
   const handleSave = useCallback(() => {
     providers.forEach((provider) => {
@@ -556,12 +541,14 @@ export function SettingsDialog({
                           <input
                             type={isRevealed ? 'text' : 'password'}
                             value={localApiKeys[provider.id] ?? ''}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
                               setLocalApiKeys((previous) => ({
                                 ...previous,
-                                [provider.id]: event.target.value,
-                              }))
-                            }
+                                [provider.id]: nextValue,
+                              }));
+                              setProviderApiKey(provider.id, nextValue);
+                            }}
                             placeholder={t('settings.enterApiKey')}
                             className="w-full rounded border border-border-dark bg-surface-dark px-3 py-2 pr-10 text-sm text-text-dark placeholder:text-text-muted"
                           />

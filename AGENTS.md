@@ -66,6 +66,10 @@
 4. 最后做一次完整构建
 - 在功能收尾或大改合并前运行完整构建。
 
+5. 发布快捷口令
+- 当用户明确说“推送更新”时，默认执行一次补丁版本发布：基于上一个 release/tag 自动递增 patch 版本号，汇总代码变动生成 Markdown 更新日志，完成版本同步、发布提交、annotated tag 与远端推送；如用户额外指定 minor/major 或自定义说明，则按用户要求覆盖默认行为。
+- 自动生成的更新日志正文只保留 `## 新增`、`## 优化`、`## 修复` 等二级标题分组与对应列表项；不要额外输出 `# vx.y.z` 标题、`基于某个 tag 之后的若干提交整理` 说明或 `## 完整提交` 区块，空分组可省略。
+
 ## 4. 架构与解耦标准
 
 ### 4.1 依赖与边界
@@ -127,6 +131,9 @@ npm run dev
 
 # Tauri 联调
 npm run tauri dev
+
+# 自动发布（默认建议配合 docs/releases/vx.y.z.md 使用）
+npm run release -- patch --notes-file docs/releases/v0.1.12.md
 ```
 
 ### 6.2 快速检查（优先执行）
@@ -144,11 +151,16 @@ cd src-tauri && cargo check
 ```bash
 # 前端完整构建
 npm run build
+
+# 触发一次正式发布（会同步版本、提交、打 tag、推送）
+npm run release -- patch --notes-file docs/releases/v0.1.12.md
 ```
 
 说明：
 - 日常迭代不要求每次都完整打包，先走 `tsc --noEmit` + 关键路径手测。
 - 影响打包、依赖、入口、持久化、Tauri 命令时，再执行完整构建。
+- 发布说明优先落到 `docs/releases/vx.y.z.md`，再通过 `npm run release` 或“推送更新”口令触发发布。
+- `docs/releases/vx.y.z.md` 的默认格式同样只保留二级标题分组和列表正文，不写额外总标题、范围说明和完整提交清单。
 
 ## 7. 性能实践
 
@@ -215,6 +227,7 @@ npm run build
 - 无明显性能回退（拖拽、缩放、输入响应）。
 - 轻量检查通过：`npx tsc --noEmit`，Rust 改动则 `cargo check`。
 - 大改或发布前：`npm run build`。
+- 如为正式发布，确认 `docs/releases/vx.y.z.md` 已更新，并与本次 tag/版本号一致。
 - 新增约束/行为变化需同步更新文档。
 
 ## 11. i18n 规范

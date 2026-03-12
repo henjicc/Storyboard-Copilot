@@ -26,7 +26,7 @@ import '@xyflow/react/dist/style.css';
 
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { getConfiguredApiKeyCount, useSettingsStore } from '@/stores/settingsStore';
 import { canvasAiGateway, canvasEventBus } from '@/features/canvas/application/canvasServices';
 import {
   CANVAS_NODE_TYPES,
@@ -47,12 +47,14 @@ import {
   nodeHasTargetHandle,
 } from '@/features/canvas/domain/nodeRegistry';
 import { embedStoryboardImageMetadata } from '@/commands/image';
+import { listModelProviders } from '@/features/canvas/models';
 import { nodeTypes } from './nodes';
 import { edgeTypes } from './edges';
 import { NodeSelectionMenu } from './NodeSelectionMenu';
 import { SelectedNodeOverlay } from './ui/SelectedNodeOverlay';
 import { NodeToolDialog } from './ui/NodeToolDialog';
 import { ImageViewerModal } from './ui/ImageViewerModal';
+import { MissingApiKeyHint } from '@/features/settings/MissingApiKeyHint';
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
 
@@ -297,6 +299,10 @@ export function Canvas() {
   const closeImageViewer = useCanvasStore((state) => state.closeImageViewer);
   const navigateImageViewer = useCanvasStore((state) => state.navigateImageViewer);
   const apiKeys = useSettingsStore((state) => state.apiKeys);
+  const providerIds = useMemo(() => listModelProviders().map((provider) => provider.id), []);
+  const configuredApiKeyCount = useSettingsStore((state) =>
+    getConfiguredApiKeyCount(state.apiKeys, providerIds)
+  );
 
   const getCurrentProject = useProjectStore((state) => state.getCurrentProject);
   const saveCurrentProject = useProjectStore((state) => state.saveCurrentProject);
@@ -1564,13 +1570,16 @@ export function Canvas() {
   const emptyHint = useMemo(
     () => (
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="text-center">
-          <div className="mb-2 text-2xl text-text-muted">{t('canvas.emptyHintTitle')}</div>
-          <div className="text-sm text-text-muted opacity-60">{t('canvas.emptyHintSubtitle')}</div>
+        <div className="flex max-w-3xl flex-col items-center gap-5 px-6 text-center">
+          {configuredApiKeyCount === 0 && <MissingApiKeyHint />}
+          <div>
+            <div className="mb-2 text-2xl text-text-muted">{t('canvas.emptyHintTitle')}</div>
+            <div className="text-sm text-text-muted opacity-60">{t('canvas.emptyHintSubtitle')}</div>
+          </div>
         </div>
       </div>
     ),
-    [t]
+    [configuredApiKeyCount, t]
   );
 
   return (
@@ -1622,6 +1631,11 @@ export function Canvas() {
       </ReactFlow>
 
       {nodes.length === 0 && emptyHint}
+      {nodes.length > 0 && configuredApiKeyCount === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
+          <MissingApiKeyHint />
+        </div>
+      )}
 
       {showNodeMenu && previewConnectionVisual && (
         <svg

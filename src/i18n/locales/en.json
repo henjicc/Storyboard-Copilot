@@ -249,6 +249,8 @@
     "providerRegisterLink": "click here to sign up",
     "providerApiKeyGuideMiddle": ", then",
     "getApiKeyLink": "click here to get API key",
+    "missingAnyApiKeyMessage": "You have not configured any API keys yet. Please open Settings to configure one.",
+    "openProvidersSettings": "Open Settings",
     "aboutAppName": "Storyboard Copilot",
     "aboutIntro": "An AI storyboard workstation based on a node canvas for generation, editing, and storyboard workflows.",
     "aboutVersionLabel": "Version",

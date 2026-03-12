@@ -14,6 +14,7 @@ export type ProviderApiKeys = Record<string, string>;
 export const DEFAULT_GRSAI_NANO_BANANA_PRO_MODEL = 'nano-banana-pro';
 
 interface SettingsState {
+  isHydrated: boolean;
   apiKeys: ProviderApiKeys;
   grsaiNanoBananaProModel: string;
   hideProviderGuidePopover: boolean;
@@ -140,9 +141,27 @@ function normalizeApiKeys(input: ProviderApiKeys | null | undefined): ProviderAp
   }, {});
 }
 
+export function hasConfiguredApiKey(apiKeys: ProviderApiKeys): boolean {
+  return getConfiguredApiKeyCount(apiKeys) > 0;
+}
+
+export function getConfiguredApiKeyCount(
+  apiKeys: ProviderApiKeys,
+  providerIds?: readonly string[]
+): number {
+  const keysToCount = providerIds
+    ? providerIds.map((providerId) => apiKeys[providerId] ?? '')
+    : Object.values(apiKeys);
+
+  return keysToCount.reduce((count, key) => {
+    return normalizeApiKey(key).length > 0 ? count + 1 : count;
+  }, 0);
+}
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
+      isHydrated: false,
       apiKeys: {},
       grsaiNanoBananaProModel: DEFAULT_GRSAI_NANO_BANANA_PRO_MODEL,
       hideProviderGuidePopover: false,
@@ -218,6 +237,14 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'settings-storage',
       version: 10,
+      onRehydrateStorage: () => {
+        return (_state, error) => {
+          if (error) {
+            console.error('failed to hydrate settings storage', error);
+          }
+          useSettingsStore.setState({ isHydrated: true });
+        };
+      },
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as {
           apiKey?: string;
@@ -244,6 +271,7 @@ export const useSettingsStore = create<SettingsState>()(
         if (Object.keys(migratedApiKeys).length > 0) {
           return {
             ...(persistedState as object),
+            isHydrated: true,
             apiKeys: migratedApiKeys,
             ignoreAtTagWhenCopyingAndGenerating,
             grsaiNanoBananaProModel: normalizeGrsaiNanoBananaProModel(
@@ -270,6 +298,7 @@ export const useSettingsStore = create<SettingsState>()(
 
         return {
           ...(persistedState as object),
+          isHydrated: true,
           apiKeys: state.apiKey ? { ppio: normalizeApiKey(state.apiKey) } : {},
           ignoreAtTagWhenCopyingAndGenerating,
           grsaiNanoBananaProModel: normalizeGrsaiNanoBananaProModel(

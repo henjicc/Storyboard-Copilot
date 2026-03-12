@@ -31,11 +31,11 @@ const imageModelMap = new Map<string, ImageModelDefinition>(
   imageModels.map((model) => [model.id, model])
 );
 
-export const DEFAULT_IMAGE_MODEL_ID = 'ppio/gemini-3.1-flash';
+export const DEFAULT_IMAGE_MODEL_ID = 'kie/nano-banana-2';
 
 const imageModelAliasMap = new Map<string, string>([
-  ['gemini-3.1-flash', DEFAULT_IMAGE_MODEL_ID],
-  ['gemini-3.1-flash-edit', DEFAULT_IMAGE_MODEL_ID],
+  ['gemini-3.1-flash', 'ppio/gemini-3.1-flash'],
+  ['gemini-3.1-flash-edit', 'ppio/gemini-3.1-flash'],
 ]);
 
 export function listImageModels(): ImageModelDefinition[] {
