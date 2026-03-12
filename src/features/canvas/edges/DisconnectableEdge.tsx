@@ -7,6 +7,7 @@ import {
   type EdgeProps,
 } from '@xyflow/react';
 
+import { CANVAS_NODE_TYPES } from '@/features/canvas/domain/canvasNodes';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { buildOrthogonalRoute } from './edgeRouting';
@@ -77,14 +78,54 @@ export const DisconnectableEdge = memo(function DisconnectableEdge(props: EdgePr
     targetY,
   ]);
 
+  const isProcessingEdge = useMemo(() => {
+    const sourceNode = nodes.find((node) => node.id === source);
+    const targetNode = nodes.find((node) => node.id === target);
+
+    if (!sourceNode || !targetNode || targetNode.type !== CANVAS_NODE_TYPES.exportImage) {
+      return false;
+    }
+
+    const isSupportedSource =
+      sourceNode.type === CANVAS_NODE_TYPES.storyboardGen ||
+      sourceNode.type === CANVAS_NODE_TYPES.imageEdit;
+    if (!isSupportedSource) {
+      return false;
+    }
+
+    const isTargetGenerating =
+      (targetNode.data as { isGenerating?: boolean } | undefined)?.isGenerating === true;
+
+    return isTargetGenerating;
+  }, [nodes, source, target]);
+
+  const processingStroke = 'rgb(var(--accent-rgb) / 0.94)';
+  const processingDashStroke = 'rgb(var(--accent-rgb) / 1)';
+  const baseStrokeWidth = isProcessingEdge
+    ? (selected ? 2.7 : 2.2)
+    : (selected ? 2.4 : 1.9);
+
   return (
     <>
+      {isProcessingEdge && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={processingDashStroke}
+          strokeWidth={selected ? 2.5 : 2.1}
+          strokeLinecap="round"
+          strokeDasharray="8 10"
+          className="canvas-processing-edge__flow"
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
       <BaseEdge
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
         style={{
-          strokeWidth: selected ? 2.4 : 1.9,
+          stroke: isProcessingEdge ? processingStroke : style?.stroke,
+          strokeWidth: baseStrokeWidth,
           ...style,
         }}
       />

@@ -237,3 +237,23 @@ html[data-platform='macos'] #root {
 .canvas-minimap .react-flow__minimap-mask:active {
   cursor: grabbing;
 }
+
+@keyframes canvas-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+.canvas-processing-edge__flow {
+  animation: canvas-edge-flow 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-processing-edge__flow {
+    animation: none;
+  }
+}
