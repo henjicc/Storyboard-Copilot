@@ -93,6 +93,10 @@ function readNotesFile(notesFile) {
   return fs.readFileSync(resolvedPath, "utf8").trim();
 }
 
+function writeTempNotesFile(filePath, notes) {
+  fs.writeFileSync(filePath, `${notes.trim()}\n`, "utf8");
+}
+
 function getPreviousTag() {
   try {
     return run("git describe --tags --abbrev=0");
@@ -231,6 +235,7 @@ if (!branch || branch === "HEAD") {
 const tag = `v${nextVersion}`;
 const rawNotes = rawNotesParts.join(" ");
 const notes = buildReleaseNotes({ rawNotes, notesFile, shouldGenerateNotes, tag });
+const tempNotesFile = path.join(repoRoot, ".release-notes.tmp.md");
 
 try {
   run(`git rev-parse -q --verify refs/tags/${tag}`);
@@ -246,10 +251,16 @@ runStreaming("git", [
   "package.json",
   "package-lock.json",
   "src-tauri/Cargo.toml",
+  "src-tauri/Cargo.lock",
   "src-tauri/tauri.conf.json",
 ]);
 runStreaming("git", ["commit", "-m", `chore(release): 发布 ${tag}`]);
-runStreaming("git", ["tag", "-a", tag, "-m", notes]);
+try {
+  writeTempNotesFile(tempNotesFile, notes);
+  runStreaming("git", ["tag", "-a", tag, "-F", tempNotesFile, "--cleanup=verbatim"]);
+} finally {
+  fs.rmSync(tempNotesFile, { force: true });
+}
 runStreaming("git", ["push", "origin", branch]);
 runStreaming("git", ["push", "origin", tag]);
 
